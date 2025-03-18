@@ -1,0 +1,4 @@
+.idea
+data_generation/out_tensors
+
+**/__pycache__/

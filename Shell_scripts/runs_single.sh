@@ -103,16 +103,14 @@
 
 #Test_B --> (Dataset3 type) Task function but with in/out distribution
 # Need to be split in 2! -->  MS and chirp
-for i in $(seq 1); do
-    for frequency in 0.05 0.15 0.3; do
-        for bounds in 5 10 15; do
-            for type_input in 'chirp' 'multi_sinusoidal'; do
-#               python scratch_2024b.py --num-envs 4096 --frequency "${frequency}" --control-imposed-file False --control-imposed True --xy-circle-task False --type-of-input "${type_input}" --lower-bound-mass "${bounds}" --higher-bound-mass "${bounds}" --type-of-dataset 'test'
-                python generation_franka.py --num-envs 2048 --frequency "${frequency}" --control-imposed-file False --control-imposed True --type-of-input "${type_input}" --lower-bound-mass "${bounds}" --higher-bound-mass "${bounds}" --type-of-dataset 'test' #MISSING IN PROJECT --xy-circle-task False (?replacement of --type-of-input param?)
-            done
-        done
-    done
-done
+#forruns.sh
+
+## OSC TASK
+python generation_franka.py --num-envs 32 --frequency "0.05" --control-imposed-file False --control-imposed True --type-of-input "chirp" --lower-bound-mass "10" --higher-bound-mass "10" --type-of-dataset 'train'
+
+## syntetic inputs ???
+
+
 
 # -----------------------------------------------------------------------
 

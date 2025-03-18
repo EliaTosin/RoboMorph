@@ -4,6 +4,7 @@ This is my training dataset generator, in order to familiarize with the environm
 MANUEL BIANCHI BAZZI  -  POLITECNICO DI MILANO - created: 19/10/2023 ---> [...]
 
 """
+import sys
 
 from isaacgym import gymapi
 from isaacgym import gymutil
@@ -166,6 +167,12 @@ if control_imposed_file and ('no_gravity' in name_of_test_file) == False:
     disable_gravity_flag = False
 
 def orientation_error(desired, current):
+    """
+                                            QUAT = [i, j, k, w]
+    cc = quat_conjugate(current) # inverte le parti immaginarie (i,j,k) e mantiene la parte reale (w)
+    q_r = quat_mul(desired, cc) # la moltiplicazione tra conj e desired mi dice quanto manca (errore negli assi) per arrivare al desidered (da current)
+    return q_r[:, 0:3] * torch.sign(q_r[:, 3]).unsqueeze(-1) # tira fuori l'errore sui 3 assi. Poi usa 4⁰ componente per aggiustare segno
+    """
     cc = quat_conjugate(current)
     q_r = quat_mul(desired, cc)
     return q_r[:, 0:3] * torch.sign(q_r[:, 3]).unsqueeze(-1)
@@ -194,7 +201,7 @@ for iter_run in range(num_of_runs):
     # else:
     #     generated_seed = args.seed
     
-    print("\nGenerated seed:"+str(generated_seed))
+    print("\nGenerated seed: "+str(generated_seed))
 
     while copies:    
         #look in the other folder's is present the same seed
@@ -370,7 +377,7 @@ for iter_run in range(num_of_runs):
         # gym.set_actor_dof_properties(env, franka_handle, franka_dof_props)
 
         # Set random mass and centers of masses for each link 
-        if  not random_masses:
+        if not random_masses:
 
             # Acquire the rigid body properties of each env
             rigid_body_properties = gym.get_actor_rigid_body_properties(env, franka_handle)
@@ -381,13 +388,12 @@ for iter_run in range(num_of_runs):
                 #This is the only way to access to this class!
                 link_mass_tensor[l]=rigid_body_properties[l].mass
         else:
-            
             rigid_body_properties = gym.get_actor_rigid_body_properties(env, franka_handle)
             # initializing buffer for single env inclusion
             link_mass_tensor = torch.zeros(body_links,dtype=torch.float32,device=args.graphics_device_id)
 
             for l in range(0,len(rigid_body_properties)):
-                
+                """E: generate random masses and setting on the simulated links"""
                 rigid_body_properties[l].mass = rigid_body_properties[l].mass * torch.rand(1).uniform_(lower_bound,higher_bound).numpy()
                 link_mass_tensor[l]=rigid_body_properties[l].mass
 
@@ -453,6 +459,13 @@ for iter_run in range(num_of_runs):
     orn_des = init_orn.clone()
 
     # Prepare jacobian tensor
+    """E:
+    conv da stato joints (9) a pos end_effector (6) --> forw kin, da joint coord a world coord
+    Shape:
+    10 -> num_bodies (filtra su corpo che ci interessa) 
+    6 -> velocità del body (3 lineari 3 angolari)
+    9 -> joints (7 normali e 2 dita)
+    """
     # For franka, tensor shape is (num_envs, 10, 6, 9)
     _jacobian = gym.acquire_jacobian_tensor(sim, "franka")
     jacobian = gymtorch.wrap_tensor(_jacobian)
@@ -462,10 +475,16 @@ for iter_run in range(num_of_runs):
     j_eef = jacobian[:, hand_index - 1, :]
 
     # Prepare mass matrix tensor
+    """E:
+    descrive la relazione tra le inerzie tra i vari joint (trasforma acc joints in forze joints) --> forza necessaria per cambiare il movimento (sia fermo che durante moto) ed è influenzata da come è posizionato il robot --> indicata come M(q)
+    """
     # For franka, tensor shape is (num_envs, 9, 9)
     _massmatrix = gym.acquire_mass_matrix_tensor(sim, "franka")
     mm = gymtorch.wrap_tensor(_massmatrix)
 
+    """E:
+    due params OSC paper 3.3.2
+    """
     # Randomizing OSC control parameters
     if not random_kp_kv:
         kp = 10
@@ -564,6 +583,7 @@ for iter_run in range(num_of_runs):
         orn_cur = rb_states[hand_idxs, 3:7]
         
         # Set desired hand positions # ORIGINAL
+        """E: CIRCLE OR SPIRAL"""
         if  osc_task == True:
             # radius = 0.05
             if itr ==1:
@@ -592,14 +612,28 @@ for iter_run in range(num_of_runs):
             # pos_des[:, 1] = math.sin(itr / 50) * 0.15
             # pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 50) * 0.15
 
+            """
+            m_inv__cart = torch.inverse(mm) --> 32,9,9 #inversa della mass matrix (passa da giunti a cartesiano)
+            m_eef__joints = torch.inverse(j_eef @ m_inv @ torch.transpose(j_eef, 1, 2)) --> 32,6,6 #sposta mass matrix sull'eef = matrice 6x6 che descrive come si comporta endeff nel mondo 
+            orn_cur /= torch.norm(orn_cur, dim=-1).unsqueeze(-1) --> 32,4 #normalizza quaternione orientamento (evita errori numerici)
+            orn_err = orientation_error(orn_des, orn_cur) --> 32,3 #tira fuori errori di orientamento rispetto al target sui 3 assi 
+            pos_err = kp * (pos_des - pos_cur) --> 32,3 # calcola errore di posizione e lo moltiplica a kp (quanto voglio che il robot si muova velocemente verso errore)
+            dpose = torch.cat([pos_err, orn_err], -1) --> 32,6 # concatena errore di pos e quello di orientamento (6 assi)
+            u = torch.transpose(j_eef, 1, 2) @ m_eef @ (kp * dpose).unsqueeze(-1) - kv * mm @ dof_vel 
+            --> 32,9,1 # converte j_eef da forza (cart) a coppia (joints), porto m_eef in joints [j_eef @ m_eef] <-> quanta coppia devo fare per stare in quella posa
+                moltiplica per pos desiderata (coppia per arrivare li al target). la seconda parte considerando velocità attuali dei giunti, si calcola inerzie dei giunti [mm @ dof_vel] e le moltiplica.
+                questo serve a compensare le velocità attuali e non andare oltre il target, ripetendo cosi l'errore all'infinito.
+                tutto assieme questo da le coppie ai giunti per arrivare a quella posizione
+            """
+
             # Solve for control (Operational Space Control)
             m_inv = torch.inverse(mm)
-            m_eef = torch.inverse(j_eef @ m_inv @ torch.transpose(j_eef, 1, 2)) 
+            m_eef = torch.inverse(j_eef @ m_inv @ torch.transpose(j_eef, 1, 2))
             orn_cur /= torch.norm(orn_cur, dim=-1).unsqueeze(-1)
             orn_err = orientation_error(orn_des, orn_cur)
             pos_err = kp * (pos_des - pos_cur)
             dpose = torch.cat([pos_err, orn_err], -1)
-            u = torch.transpose(j_eef, 1, 2) @ m_eef @ (kp * dpose).unsqueeze(-1) - kv * mm @ dof_vel 
+            u = torch.transpose(j_eef, 1, 2) @ m_eef @ (kp * dpose).unsqueeze(-1) - kv * mm @ dof_vel
 
         # In these case, control is manually imposed (directly in Nm)
                 
@@ -633,6 +667,17 @@ for iter_run in range(num_of_runs):
             #  Look at the documentation for further explanation about jacobian and how they're calculated. 
             # This compensation is taken from https://github.com/NVlabs/oscar/blob/main/oscar/agents/franka.py
 
+            """
+            g_force = dynamical_inclusion.squeeze(0)[:,1:].unsqueeze(-1).unsqueeze(-1) * g --> 32,10,6,1 #masse link * g (forza di gravità dei link)
+            j_link = jacobian[:, :dof_count+1, :, :dof_count] --> 32,10,6,9 #filtro solo su body che mi interessano (primi 10, ignoro un dito della mano)
+            g_torque = (torch.transpose(j_link, 2, 3) @ g_force).squeeze(-1) 
+            --> 32,10,9 #trasponendo la jacob 6x9 (di ogni body di ogni env) faccio passaggio da mondo a giunti, 
+                quindi il g_force (nel sistema mondo) passa a giunti (diventando un torque) che serve a contrastare la gravità [quanto torque serve per rimanere in quella posa]
+            g_torque = torch.sum(g_torque, dim=1, keepdim=False) --> 32,9 #sommo le forze da compensare sui giunti per ogni body (10 body x 9 giunti)
+            g_torque = g_torque.unsqueeze(-1) --> 32,9,1 #shape matching con u
+            u += g_torque --> 32,9,1
+            """
+
             g_force = dynamical_inclusion.squeeze(0)[:,1:].unsqueeze(-1).unsqueeze(-1) * g
             j_link = jacobian[:, :dof_count+1, :, :dof_count]
             g_torque = (torch.transpose(j_link, 2, 3) @ g_force).squeeze(-1)
@@ -641,14 +686,15 @@ for iter_run in range(num_of_runs):
             u += g_torque       # u = u + g_torque --> more efficent
 
     # ------------------------------------- APPLICATION OF U -------------------------------------------------
-            
+        """E:
+        U -> effort to apply on the joints (computed based on the task)
+        """
         # Set control action as torque tensor, or position tensor
         gym.set_dof_actuation_force_tensor(sim, gymtorch.unwrap_tensor(u))
 
     # ------------------------------------ CONTACT COLLECTION -------------------------------------------------
 
-        # ATTENTION! gym.refresh_net_contact_force_tensor(sim) need to be added! remember
-        _contact_forces = gym.acquire_net_contact_force_tensor(sim) 
+        _contact_forces = gym.acquire_net_contact_force_tensor(sim)
         # returns: (envs x 11, 3) --> 16 envs --> (176,3), xyz components for each body
         # wrap it in a PyTorch Tensor
         contact_forces = gymtorch.wrap_tensor(_contact_forces)
@@ -872,10 +918,23 @@ for iter_run in range(num_of_runs):
 
         # Check if the file already exists in the chosen subfolder (train or dataset):
         list_of_tensors = os.listdir("./out_tensors/"+type_of_dataset)
-        
-        name_tensor = (str(generated_seed) +'_envs_' + str(num_valid_envs) + '_steps_' + str(max_iteration)+ 
-                       '_f_'+ str(frequency).replace('.','_') +'_'+ type_of_input_save + '_rand_'+ str(int(random_initial_positions))+ str(int(random_stiffness_dofs)) + str(int(random_masses)) + str(int(random_coms))
-                       + addition_gravity + '_bounds_mass_'+str(lower_bound_mass)+'_'+str(higher_bound_mass))
+
+        """E:
+        12 - seed (for reproducibility)
+        32 - num_envs
+        1000 - max_iteration? (steps)
+        0_1 - frequency? (0.1)
+        0010 - MS_rand ??task? --> yes
+        15_15 - higher/lower bound mass (percentage)
+        """
+        """ 12_envs_32_steps_1000_f_0_1_MS_rand_0010_bounds_mass_15_15.pt """
+        name_tensor = (str(generated_seed) +
+                       '_envs_' + str(num_valid_envs) +
+                       '_steps_' + str(max_iteration) +
+                       '_f_' + str(frequency).replace('.','_') +
+                       '_' + type_of_input_save +
+                       '_rand_' + str(int(random_initial_positions)) + str(int(random_stiffness_dofs)) + str(int(random_masses)) + str(int(random_coms)) + addition_gravity +
+                       '_bounds_mass_' + str(lower_bound_mass)+'_'+str(higher_bound_mass))
         
         if osc_task:
             
@@ -904,7 +963,7 @@ for iter_run in range(num_of_runs):
         with open("training_dataset_list.txt") as text_file:
             lines = [line.rstrip() for line in text_file]
         
-        no_copies = True
+        no_copies = True #E: set to True to save tensors, otherwise False
 
         for line in lines:
             if line =='':
@@ -944,21 +1003,21 @@ for iter_run in range(num_of_runs):
     # i = 0 ,1, 2   # x y z [m]
     # i = 3 - 6   # quaternion orientation
 
-    if plot_diagrams and not(error_all_collided):
+    if plot_diagrams and not error_all_collided:
         
         print("\n Plotting ...")
         #If there's no dynamical inclusion in input, plot only_torques automatically.
-        if dynamical_inclusion_flag == False: 
+        if dynamical_inclusion_flag == False:
             plot_only_torques = True 
 
         fig, axs = plt.subplots(int(tot_coordinates/2),2,figsize=(20,20)) 
         fig.suptitle('Output: full pose and joint positions')
         label_coordinates = ['x','y','z','$X$','$Y$','$Z$','$W$',
                              '$q_0$','$q_1$','$q_2$','$q_3$','$q_4$','$q_5$','$q_6$'] 
-        
+
         k = 0
         for j in range(2):
-            for i in range(int(tot_coordinates/2)): 
+            for i in range(int(tot_coordinates/2)):
                 if k <=2:
                     axs[i,j].plot(buffer_position[:,:,k].to("cpu").numpy())
                     axs[i,j].set(ylabel='m', title=label_coordinates[k])
@@ -1061,6 +1120,7 @@ for iter_run in range(num_of_runs):
     torch.cuda.empty_cache()
 
 print("Simulation finished.")
+
 
 # ============================== SAVING TENSORS TO FILE ===============================
 

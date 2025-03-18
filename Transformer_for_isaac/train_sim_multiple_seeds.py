@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import math
 from functools import partial
-# from dataset import WHDataset, LinearDynamicalDataset
+from dataset import WHDataset, LinearDynamicalDataset
 from torch.utils.data import DataLoader
 from transformer_sim import Config, TSTransformer
 from Older_versions.transformer_onestep import warmup_cosine_lr
@@ -367,7 +367,7 @@ if __name__ == '__main__':
                 if (iter_num % cfg.eval_interval == 0) and iter_num > 0:
                     loss_val = estimate_loss()
                     LOSS_VAL.append(loss_val)
-                    print(f"\n{iter_num=} {loss_val=:.4f}\n")
+                    print(f"\n{iter_num} {loss_val:.4f}\n")
                     if loss_val < best_val_loss:
                         best_val_loss = loss_val
                         checkpoint = {
@@ -445,7 +445,7 @@ if __name__ == '__main__':
 
                 # print every 100 iters
                 if iter_num % cfg.iter_log == 0:
-                    print(f"\n{iter_num=} {loss=:.4f} {loss_val=:.4f} {lr_iter=}\n")
+                    print(f"\n{iter_num} {loss:.4f} {loss_val:.4f} {lr_iter}\n")
                     # writer.add_scalar('Train Loss', loss, iter_num) #added
                     # writer.add_scalar('Val Loss', loss_val, iter_num)
    
@@ -488,4 +488,4 @@ if __name__ == '__main__':
         if cfg.log_wandb:
             wandb.finish()
         time_loop = time.time() - time_start
-        print(f"\n{time_loop=:.2f} seconds.")
+        print(f"\n{time_loop:.2f} seconds.")
