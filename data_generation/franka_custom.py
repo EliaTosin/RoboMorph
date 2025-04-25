@@ -77,6 +77,47 @@ def control_osc(dpose):
     u += (torch.eye(7, device=device).unsqueeze(0) - torch.transpose(j_eef, 1, 2) @ j_eef_inv) @ u_null
     return u.squeeze(-1)
 
+def check_collisions(sim, gym, black_list, bodbody_names, body_links=11):
+    # ------------------------------------ CONTACT COLLECTION -------------------------------------------------
+
+    _contact_forces = gym.acquire_net_contact_force_tensor(sim)
+    # returns: (envs x 11, 3) --> 16 envs --> (176,3), xyz components for each body
+    # wrap it in a PyTorch Tensor
+    contact_forces = gymtorch.wrap_tensor(_contact_forces)
+
+    # -- COLLISION DETECTION
+    # body contact contains all the nonzero indeces about contact forces
+    body_contact = torch.nonzero(abs(contact_forces) > 0.01)
+
+    # This for processes in all the istant of the simulation the indexes to be taken into account:
+    # Anyway, in the black list they enter only the first time.
+
+
+
+    for j in range(body_contact.shape[0]):
+        _body_contact = body_contact[j].to("cpu").numpy()
+        env_idx_collision = int(np.ceil(_body_contact[0] / body_links) - 1)
+        link_idx = _body_contact[0] - body_links * env_idx_collision
+
+        if not env_idx_collision in black_list:
+
+            black_list.append(env_idx_collision)
+            link_name = body_names[link_idx]
+            print("-" * 20)
+            print(f"In env: {env_idx_collision}, body n° {link_idx} ({link_name}) collided: step {itr}")
+            print("contact indexes:", body_contact[j])
+            print("body_contact: ", contact_forces[body_contact[j, 0], :].to("cpu").numpy())
+
+            # Visual purposes - coloring in red the colliding robots
+
+            mesh = gymapi.MESH_VISUAL_AND_COLLISION  # MESH_VISUAL works fine
+            color = gymapi.Vec3(.9, .25, .15)
+            env_handle = gym.get_env(sim, env_idx_collision)
+            for k in range(body_links):
+                gym.set_rigid_body_color(env_handle, franka_handle, k, mesh, color)
+
+    return black_list
+
 
 # set random seed
 np.random.seed(42)
@@ -303,6 +344,9 @@ sign =  (torch.ones(1) * -1).to(device=device)
 
 itr = 0
 max_iteration = 1000
+black_list = []
+body_names = gym.get_actor_rigid_body_names(env, franka_handle)
+
 # simulation loop
 while not gym.query_viewer_has_closed(viewer) and itr <= max_iteration-1:
 
@@ -340,6 +384,8 @@ while not gym.query_viewer_has_closed(viewer) and itr <= max_iteration-1:
     # Deploy actions
     gym.set_dof_position_target_tensor(sim, gymtorch.unwrap_tensor(pos_action)) #ik
     gym.set_dof_actuation_force_tensor(sim, gymtorch.unwrap_tensor(effort_action)) #osc
+
+    black_list = check_collisions(sim, gym, black_list, body_names)
 
     # update viewer
     gym.step_graphics(sim)
