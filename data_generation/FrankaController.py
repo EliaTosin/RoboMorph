@@ -18,7 +18,7 @@ from isaacgym import gymtorch
 
 class JointPositionController:
 
-    def __init__(self, gym, sim, asset, target_pos, num_envs, device):
+    def __init__(self, gym, sim, asset, num_envs, device, dt, max_time_s):
         """
             salvare gym controller in un attributo locale
 
@@ -59,8 +59,10 @@ class JointPositionController:
         self.dof_targets = torch.zeros((self.num_envs, len(self.joint_names)), device=self.device)
 
         self.elapsed_time = 0
+        self.dt = dt
+        self.max_time_s = max_time_s
 
-    def start(self):
+    def start(self, target_pos):
         """
             settaggio initial pose con pose attuali
 
@@ -68,6 +70,9 @@ class JointPositionController:
         """
         # taking the first [:,:,0] because "acquire_dof_state_tensor" retrieves both positions and velocities
         self.dof_states = gymtorch.wrap_tensor(self.gym_interface.acquire_dof_state_tensor(self.sim)).view(self.num_envs, -1, 2)[:, :, 0]
+
+        self.dof_targets = target_pos
+
         self.elapsed_time = 0
 
     def update(self):
@@ -76,8 +81,18 @@ class JointPositionController:
 
             per ogni giunto
                 se time > 10:
-                    reset a posiz default
+                    set pos des
                 else:
-                    set pos desiderata
-
+                    interpolazione tra actual e target
         """
+        self.elapsed_time += self.dt
+
+        if self.elapsed_time > self.max_time_s:
+            self.gym_interface.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(self.dof_targets))
+        else:
+            alpha = self.elapsed_time / self.max_time_s
+            intermediate_dof_pos = alpha * self.dof_targets + (self.max_time_s-alpha) * self.dof_states
+            self.gym_interface.set_dof_position_target_tensor(self.sim, gymtorch.unwrap_tensor(intermediate_dof_pos))
+
+        self.gym_interface.simulate(self.sim)
+        self.gym_interface.fetch_results(self.sim, True)
