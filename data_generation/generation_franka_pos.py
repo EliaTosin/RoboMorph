@@ -24,6 +24,7 @@ from pathlib import Path
 from FrankaController import JointPositionController
 
 torch.cuda.empty_cache()
+torch.set_printoptions(precision=4, sci_mode=False)
 
 args = gymutil.parse_arguments(description="Data Generation for multiple Franka systems",
         custom_parameters=[
@@ -45,8 +46,8 @@ args = gymutil.parse_arguments(description="Data Generation for multiple Franka 
         {"name": "--type-of-dataset", "type": str, "default": 'train', "help": "This is the subfolder in which we want to save ['train' or 'test' ]"},
         # Randomness of the simulation
         {"name": "--random-stiffness-dofs", "type": gymutil.parse_bool, "const": True, "default": False, "help": "Stifness and damping of each Dofs"},
-        {"name": "--random-initial-positions", "type": gymutil.parse_bool, "const": True, "default": True, "help": "Initial random position"},
-        {"name": "--random-masses", "type": gymutil.parse_bool, "const": True, "default": True, "help": "Random mass of each link"},
+        {"name": "--random-initial-positions", "type": gymutil.parse_bool, "const": True, "default": False, "help": "Initial random position"},
+        {"name": "--random-masses", "type": gymutil.parse_bool, "const": True, "default": False, "help": "Random mass of each link"},
         {"name": "--random-coms", "type": gymutil.parse_bool, "const": True, "default": False, "help": "Random position of com of each link"},
         {"name": "--lower-bound-mass", "type": int, "default": 15, "help": "lower bound mass randomization"},
         {"name": "--higher-bound-mass", "type": int, "default": 15, "help": "higher bound mass randomization"},
@@ -188,6 +189,12 @@ def orientation_error(desired, current):
     q_r = quat_mul(desired, cc)
     return q_r[:, 0:3] * torch.sign(q_r[:, 3]).unsqueeze(-1)
 
+def redundant_manipulator_ik2(dpose, j_eef, num_envs, damping=0.05):
+    # solve redundant manipulator ik (formula 3.72 pag 154 siciliano)
+    # j_eef_T = torch.transpose(j_eef, 1, 2)
+    # lmbda = torch.eye(6, device=args.graphics_device_id) * (damping ** 2)
+    # return (j_eef_T @ torch.inverse(j_eef @ j_eef_T + lmbda) @ dpose).view(num_envs, 9)
+    pass
 
 def damped_least_squared_ik(dpose, j_eef, num_envs, damping=0.05):
     # solve damped least squares ik
@@ -590,9 +597,19 @@ for iter_run in range(num_of_runs):
 
     _dof_states = gym.acquire_dof_state_tensor(sim)
     itr = 0 # control variable for inner loop
+    # joint_pos_controller = JointPositionController(gym=gym, sim=sim, asset=franka_asset, num_envs=num_envs, device=args.graphics_device_id, dt=sim_params.dt, max_time_s = 5)
+
+    desired_poses = torch.zeros_like(init_pos)
+    actual_poses = torch.zeros_like(init_pos)
+    joint_poses = torch.zeros(1, 7)
+    pos_errors = torch.zeros((1, 3), device=args.graphics_device_id)
+
+    from PlotterHelper import Plotter
+    plotter = Plotter(num_envs)
 
     ## START LOOP 🔄🔄
-    while not condition_window  and itr <= max_iteration-1: # while not gym.query_viewer_has_closed(viewer):  #ORIGINAL
+    while not condition_window  and itr <= max_iteration-1:
+    # while not gym.query_viewer_has_closed(viewer):  #ORIGINAL
 
         itr += 1
         # Update jacobian and mass matrix and contact collection
@@ -631,6 +648,12 @@ for iter_run in range(num_of_runs):
                 pos_des[:, 0] = init_pos[:, 0] 
                 pos_des[:, 1] = init_pos[:, 1] + math.sin(itr / 50) * radius #EDITED
                 pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 50) * radius #EDITED
+            elif type_of_task == 'ELIA':
+                pos_des[:, 0] = init_pos[:, 0]
+                pos_des[:, 1] = init_pos[:, 1]
+                pos_des[:, 2] = init_pos[:, 2]
+
+            plotter.add_desired_pose(pos_des)
 
             # pos_des[:, 0] = init_pos[:, 0] - 0.05
             # pos_des[:, 1] = math.sin(itr / 50) * 0.15
@@ -654,10 +677,16 @@ for iter_run in range(num_of_runs):
             m_inv = torch.inverse(mm)
             m_eef = torch.inverse(j_eef @ m_inv @ torch.transpose(j_eef, 1, 2))
             orn_err = orientation_error(orn_des, orn_cur)
+
+            kp = 2 #TODO PARAM DA RANDOMIZZARE?
             pos_err = kp * (pos_des - pos_cur)
             dpose = torch.cat([pos_err, orn_err], -1).unsqueeze(-1)
-            u = damped_least_squared_ik(dpose, j_eef, num_envs)
+
+            delta_u = damped_least_squared_ik(dpose, j_eef, num_envs)
+            u = dof_states[:, 0].view(num_envs, 9)
+            u += delta_u
             u[:, 7:] = franka_mids[7].item() # setting the positions of the finger joints at the middle point to not collide
+            u = u.contiguous() # so it can be wrapped into a gymtorch tensor
 
     # ------------------------------------- APPLICATION OF U -------------------------------------------------
         """E:
@@ -667,7 +696,6 @@ for iter_run in range(num_of_runs):
         # joint_pos_controller = JointPositionController(gym=gym, sim=sim, asset=franka_asset, target_pos=joint_pos_des, num_envs=num_envs, device=args.graphics_device_id)
         # joint_pos_controller.start()
 
-        # joint_pos_des_2[0, :] = joint_pos_des[0, :]
         gym.set_dof_position_target_tensor(sim, gymtorch.unwrap_tensor(u))
 
         # ------------------------------------ CONTACT COLLECTION -------------------------------------------------
@@ -711,6 +739,13 @@ for iter_run in range(num_of_runs):
         
         gym.simulate(sim)
         gym.fetch_results(sim, True)
+
+        # joint_pos_controller.start(u)
+        #
+        # while(joint_pos_controller.elapsed_time < joint_pos_controller.max_time_s):
+        #     joint_pos_controller.update()
+        #     gym.simulate(sim)
+        #     gym.fetch_results(sim, True)
 
         if not headless_mode:
             # Step rendering
@@ -758,9 +793,11 @@ for iter_run in range(num_of_runs):
         pos_cur = pos_cur.to("cpu").view(1,num_envs,3)  # x y z
         orn_cur = orn_cur.to("cpu").view(1,num_envs,4)  # orientation angles
 
+        plotter.add_joint_pose(dof_pos.squeeze(dim=0))
+
         # -------------------------- INCLUDING dof_pos for 7 - dimension state space -------------------------------
 
-        full_pose = torch.cat((pos_cur,orn_cur,dof_pos),dim = 2).to(device=args.graphics_device_id) 
+        full_pose = torch.cat((pos_cur,orn_cur,dof_pos),dim = 2).to(device=args.graphics_device_id)
         # stacking onto the 0 dimension, each acquisition        
         buffer_position = torch.cat((buffer_position, full_pose), 0)  
         pos_desired=pos_des.to("cpu").view( 1,num_envs, 3) 
@@ -816,6 +853,8 @@ for iter_run in range(num_of_runs):
         ## in this block, all the envs that have collided at least one step, are removed from the acquisitioncle
 
         if itr == max_iteration:
+
+            plotter.plot()
             
             saturation_idxs = list(set(saturated_ul_idxs + saturated_ll_idxs))
             print("\n----Number of saturated simulations: ",len(saturation_idxs),"/", num_envs,"----\n" ) 

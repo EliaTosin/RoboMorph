@@ -347,6 +347,9 @@ max_iteration = 1000
 black_list = []
 body_names = gym.get_actor_rigid_body_names(env, franka_handle)
 
+from PlotterHelper import Plotter
+plotter = Plotter(num_envs)
+
 # simulation loop
 while not gym.query_viewer_has_closed(viewer) and itr <= max_iteration-1:
 
@@ -381,6 +384,11 @@ while not gym.query_viewer_has_closed(viewer) and itr <= max_iteration-1:
     else:       # osc
         effort_action[:, :7] = control_osc(dpose)
 
+    plotter.add_desired_pose(pos_des)
+    plotter.add_actual_pose(hand_pos)
+    plotter.add_pos_errors(pos_err)
+    plotter.add_joint_pose(dof_pos.squeeze(-1)[:, :7])
+
     # Deploy actions
     gym.set_dof_position_target_tensor(sim, gymtorch.unwrap_tensor(pos_action)) #ik
     gym.set_dof_actuation_force_tensor(sim, gymtorch.unwrap_tensor(effort_action)) #osc
@@ -395,3 +403,5 @@ while not gym.query_viewer_has_closed(viewer) and itr <= max_iteration-1:
 # cleanup
 gym.destroy_viewer(viewer)
 gym.destroy_sim(sim)
+
+plotter.plot()
