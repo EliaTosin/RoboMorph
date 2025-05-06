@@ -22,6 +22,7 @@ import os
 from pathlib import Path
 
 from FrankaController import JointPositionController
+from PlotterHelper import Plotter
 
 torch.cuda.empty_cache()
 torch.set_printoptions(precision=4, sci_mode=False)
@@ -189,12 +190,49 @@ def orientation_error(desired, current):
     q_r = quat_mul(desired, cc)
     return q_r[:, 0:3] * torch.sign(q_r[:, 3]).unsqueeze(-1)
 
-def redundant_manipulator_ik2(dpose, j_eef, num_envs, damping=0.05):
+# computes w(q) (formula 3.56, page 146) since we want to move away from singularities
+def manipulability_measure(j_eef):
+    wq = torch.sqrt(torch.linalg.det(j_eef @ torch.transpose(j_eef, 1, 2)))
+    return wq.unsqueeze(-1)
+
+# compute q0 (formula 3.55, page 146) which is the joint configuration in the null space that allows to move away from singularities using w(q)
+"""
+Since here I don't have a jacobian in function of q, I can't compute the derivative for each joint ( ∂w(q)/∂q_i ), so I just replicate the obtained w(q) on every joint
+"""
+def numerical_gradient_q0(dof_pos_prev, dof_pos, j_eef, q0_prev, k0=0.01, epsilon=1e-6):
+    """
+    Params:
+    k0 : gain value used to compute q0
+    epsilon : small value used to compute the gradient (avoid division by zero)
+    """
+    q = manipulability_measure(j_eef)
+
+    num_envs = dof_pos.shape[0]
+    num_dofs = dof_pos.shape[1]
+    # Compute manipulability gradient estimate (if past data exists)
+    if dof_pos_prev is not None and q0_prev is not None:
+        q = torch.repeat_interleave(q.unsqueeze(-1), num_dofs, 1) # replicating the q along the num_dofs
+        grad_w = (q - q0_prev) / (dof_pos - dof_pos_prev + epsilon)  # element-wise finite difference
+        grad_w = torch.clamp(grad_w, 0, 10) # gradient clipped between [0,10] to not reduce the manipulabilty (going to singularity)
+    else:
+        grad_w = torch.zeros((num_envs, num_dofs, 1), device=args.graphics_device_id) #first iteration the gradient is zeros
+
+    return k0 * grad_w
+
+def redundant_manipulator_ik2(dof_pos_prev, dof_pos, j_eef, des_vel, d_pose, num_envs, q0_prev):
     # solve redundant manipulator ik (formula 3.72 pag 154 siciliano)
-    # j_eef_T = torch.transpose(j_eef, 1, 2)
-    # lmbda = torch.eye(6, device=args.graphics_device_id) * (damping ** 2)
-    # return (j_eef_T @ torch.inverse(j_eef @ j_eef_T + lmbda) @ dpose).view(num_envs, 9)
-    pass
+    I = torch.eye(9, device=args.graphics_device_id)
+    j_eef_pinv = torch.linalg.pinv(j_eef)
+
+    q0 = numerical_gradient_q0(dof_pos_prev, dof_pos, j_eef, q0_prev)
+
+    e_dot = j_eef_pinv @ (des_vel + d_pose)
+    # e_dot = j_eef_pinv @ d_pose
+    q0_constraint = (I - j_eef_pinv @ j_eef) @ q0
+
+    u = e_dot + q0_constraint
+
+    return u, q0
 
 def damped_least_squared_ik(dpose, j_eef, num_envs, damping=0.05):
     # solve damped least squares ik
@@ -204,8 +242,8 @@ def damped_least_squared_ik(dpose, j_eef, num_envs, damping=0.05):
 
 def classic_ik(dpose, j_eef):
     j_eef_inv = torch.linalg.pinv(j_eef)  # compute pseudo-inverse (since the jacobian is not squared)
-    joint_pos_des = j_eef_inv @ dpose.unsqueeze(-1)  # (32, 9, 1) # 9 joint pos for every env --> then squeeze to (32, 9) and made contiguos to dodge the illegal memory access
-    return joint_pos_des.squeeze(-1).to(device=args.graphics_device_id).contiguous()
+    joint_pos_des = j_eef_inv @ dpose  # (32, 9, 1) # 9 joint pos for every env --> then squeeze to (32, 9) and made contiguos to dodge the illegal memory access
+    return joint_pos_des.to(device=args.graphics_device_id)
 
 
 for iter_run in range(num_of_runs):
@@ -259,7 +297,9 @@ for iter_run in range(num_of_runs):
     sim_params = gymapi.SimParams()
     sim_params.up_axis = gymapi.UP_AXIS_Z
     sim_params.gravity = gymapi.Vec3(0.0, 0.0, -9.8)
-    sim_params.dt = 1.0/60  # [s]
+    # sim_params.dt = 1.0/60  # [s]
+    sim_params.dt = 1.0/200  # [s]
+
     sim_params.substeps = 2
     if args.physics_engine == gymapi.SIM_PHYSX:
         sim_params.physx.solver_type = 1
@@ -354,6 +394,7 @@ for iter_run in range(num_of_runs):
     # This is the initializing tensor for acquisition of the dynamical embedded parameters (masses of each joint)
 
     dynamical_inclusion = torch.zeros(0,body_links,dtype=torch.float32,device=args.graphics_device_id)
+    plotter = Plotter(num_envs, dof_lower_limits=franka_lower_limits, dof_upper_limits=franka_upper_limits)
 
     for i in range(num_envs):
         # Create env
@@ -371,10 +412,11 @@ for iter_run in range(num_of_runs):
             magnitude = torch.rand(1).uniform_(0.2,0.8).numpy()
             default_dof_state["pos"][0] =  magnitude * np.sign(torch.rand(1).uniform_(-1,1).numpy()) * torch.rand(1).uniform_(franka_lower_limits[0],franka_upper_limits[0]).numpy() 
             default_dof_state["pos"][1:7] = franka_mids[1:7] + np.sign(torch.rand(1).uniform_(-1,1).numpy()) * 0.25 * torch.rand(6).numpy()
-            
+
             # default_dof_state["pos"][0] = 0.2 * torch.rand(1).uniform_(franka_lower_limits[0],franka_upper_limits[0]).numpy() 
             # default_dof_state["pos"][1:7] = franka_mids[1:7] + 0.1 * torch.rand(6).numpy()
 
+        plotter.add_joint_init_pos(default_dof_state["pos"][:7])
         default_dof_state[7:] = franka_upper_limits[7:]
         gym.set_actor_dof_states(env, franka_handle, default_dof_state , gymapi.STATE_ALL)
 
@@ -604,8 +646,9 @@ for iter_run in range(num_of_runs):
     joint_poses = torch.zeros(1, 7)
     pos_errors = torch.zeros((1, 3), device=args.graphics_device_id)
 
-    from PlotterHelper import Plotter
-    plotter = Plotter(num_envs)
+    # used in redundant manipulator ik
+    dof_pos_prev = None
+    q0_prev = None
 
     ## START LOOP 🔄🔄
     while not condition_window  and itr <= max_iteration-1:
@@ -626,38 +669,48 @@ for iter_run in range(num_of_runs):
         # Set desired hand positions # ORIGINAL
         """E: CIRCLE OR SPIRAL"""
         if  osc_task == True:
-            # radius = 0.05
             if itr ==1:
                 radius = torch.rand((1,num_envs)).uniform_(0.01,0.12).to(device=args.graphics_device_id)
-                period = torch.rand(1).uniform_(20,100).to(device=args.graphics_device_id)
-                z_speed = torch.rand(1).uniform_(0.1,0.4).to(device=args.graphics_device_id)
+                period = torch.rand(1).uniform_(20,100).to(device=args.graphics_device_id) # alza per rallentare
+                z_speed = torch.rand(1).uniform_(0.1,0.4).to(device=args.graphics_device_id) # abbassare per rallentare
                 sign = torch.sign(torch.rand(1).uniform_(-1,1)).to(device=args.graphics_device_id)
                 # offset =  torch.sign(torch.rand(1).uniform_(-0.3,0.3)).to(device=args.graphics_device_id)
+                vel_des = torch.zeros((num_envs, 6), device=args.graphics_device_id)
+
             #This was used for testC!
             if  type_of_task == 'VS': # Vertical spyral
-                pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / period) * radius 
+                pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / period) * radius
                 pos_des[:, 1] = init_pos[:, 1] + math.cos(itr / period) * radius
-                pos_des[:, 2] = init_pos[:, 2] - 0.1 + sign * z_speed * itr/max_iteration
+                # pos_des[:, 2] = init_pos[:, 2] - 0.1 + sign * z_speed * itr/max_iteration
+                pos_des[:, 2] = init_pos[:, 2] + sign * z_speed * itr / max_iteration
+
+                vel_des[:, 0] = radius * math.cos(itr / period)
+                vel_des[:, 1] = radius * math.sin(itr / period)
+                vel_des[:, 2] = z_speed * sign * itr / max_iteration
             elif type_of_task == 'FS':
                 radius = 0.1           # Fixed spyral
-                pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / 80) * radius 
+                pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / 80) * radius
                 pos_des[:, 1] = init_pos[:, 1] + math.cos(itr / 80) * radius
                 pos_des[:, 2] = init_pos[:, 2] + - 0.1 + 0.2 * itr/max_iteration
             elif type_of_task == 'FC': # Fixed circle
                 # radius = 0.1
-                pos_des[:, 0] = init_pos[:, 0] 
+                pos_des[:, 0] = init_pos[:, 0]
                 pos_des[:, 1] = init_pos[:, 1] + math.sin(itr / 50) * radius #EDITED
                 pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 50) * radius #EDITED
             elif type_of_task == 'ELIA':
                 pos_des[:, 0] = init_pos[:, 0]
                 pos_des[:, 1] = init_pos[:, 1]
-                pos_des[:, 2] = init_pos[:, 2]
-
-            plotter.add_desired_pose(pos_des)
+                pos_des[:, 2] = init_pos[:, 2] + 0.2
 
             # pos_des[:, 0] = init_pos[:, 0] - 0.05
-            # pos_des[:, 1] = math.sin(itr / 50) * 0.15
+            # pos_des[:, 1] = init_pos[:, 1] + math.sin(itr / 50) * 0.15
             # pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 50) * 0.15
+            # vel_des[:, 0] = 0
+            # vel_des[:, 1] = math.cos(itr / 50) * 0.15
+            # vel_des[:, 2] = math.sin(itr / 50) * 0.15
+
+            plotter.add_desired_pose(pos_des)
+            plotter.add_actual_pose(pos_cur)
 
             """
             m_inv__cart = torch.inverse(mm) --> 32,9,9 #inversa della mass matrix (passa da giunti a cartesiano)
@@ -682,11 +735,23 @@ for iter_run in range(num_of_runs):
             pos_err = kp * (pos_des - pos_cur)
             dpose = torch.cat([pos_err, orn_err], -1).unsqueeze(-1)
 
-            delta_u = damped_least_squared_ik(dpose, j_eef, num_envs)
-            u = dof_states[:, 0].view(num_envs, 9)
-            u += delta_u
-            u[:, 7:] = franka_mids[7].item() # setting the positions of the finger joints at the middle point to not collide
-            u = u.contiguous() # so it can be wrapped into a gymtorch tensor
+            control_formula = "damped"
+            if control_formula == "damped":
+                delta_u = damped_least_squared_ik(dpose, j_eef, num_envs)
+                u = dof_states[:, 0].view(num_envs, 9)
+                u += delta_u
+                u[:, 7:] = franka_mids[7].item() # setting the positions of the finger joints at the middle point to not collide
+                u = u.unsqueeze(-1).contiguous() # so it can be wrapped into a gymtorch tensor
+            elif control_formula == "redundant":
+                u, q0 = redundant_manipulator_ik2(dof_pos_prev, dof_pos, j_eef, vel_des.unsqueeze(-1), dpose, num_envs, q0_prev)
+
+                u[:, 7:] = franka_mids[7].item()
+                redundant_u = u.contiguous() # so it can be wrapped into a gymtorch tensor
+            elif control_formula == "classic": # using classic ik
+                u = classic_ik(dpose, j_eef)
+
+                u[:, 7:] = franka_mids[7].item()
+                ik_u = u.contiguous()  # so it can be wrapped into a gymtorch tensor
 
     # ------------------------------------- APPLICATION OF U -------------------------------------------------
         """E:
@@ -696,6 +761,7 @@ for iter_run in range(num_of_runs):
         # joint_pos_controller = JointPositionController(gym=gym, sim=sim, asset=franka_asset, target_pos=joint_pos_des, num_envs=num_envs, device=args.graphics_device_id)
         # joint_pos_controller.start()
 
+        plotter.add_joint_pose(dof_pos.view(1, num_envs, franka_num_dofs).squeeze(dim=0)[:, :7])
         gym.set_dof_position_target_tensor(sim, gymtorch.unwrap_tensor(u))
 
         # ------------------------------------ CONTACT COLLECTION -------------------------------------------------
@@ -771,7 +837,7 @@ for iter_run in range(num_of_runs):
         if osc_task:
             if itr==1:
                 print(f"\n Torque Imposed by OSC - {type_of_task}")
-            control_action = u.unsqueeze(-1)
+            control_action = u
             # if xy_task , I want [2, 9, 1001]
 
         # dynamical inclusion happens, both if the masses changes, both if the masses don't change
@@ -783,21 +849,26 @@ for iter_run in range(num_of_runs):
         else: 
             buffer_control_action = torch.cat((buffer_control_action, control_action), 0) 
 
+        # cloning previous values for redundant manipulator control
+        if dof_pos_prev is not None and q0_prev is not None:
+            dof_pos_prev = dof_pos.clone()
+            q0_prev = q0.clone()
 
         dof_states = gymtorch.wrap_tensor(_dof_states)
-        dof_pos = dof_states[:, 0]
+        dof_vel = dof_states[:, 1].view(num_envs, 9, 1)
+        dof_pos = dof_states[:, 0].view(num_envs, 9, 1)
 
         # Be careful using view | movedim is an alternative most of the times
-        dof_pos = dof_pos.to("cpu").view(1,num_envs,9)
-        dof_pos = dof_pos[:,:,:7]  # pick up only the 7 dofs! gripper fingers are excluded for output.
+        dof_pos7 = dof_pos.to("cpu").view(1,num_envs,9)
+        dof_pos7 = dof_pos7[:,:,:7]  # pick up only the 7 dofs! gripper fingers are excluded for output.
         pos_cur = pos_cur.to("cpu").view(1,num_envs,3)  # x y z
         orn_cur = orn_cur.to("cpu").view(1,num_envs,4)  # orientation angles
 
-        plotter.add_joint_pose(dof_pos.squeeze(dim=0))
+        plotter.add_joint_target(u[:, :7, :].squeeze(dim=2))
 
         # -------------------------- INCLUDING dof_pos for 7 - dimension state space -------------------------------
 
-        full_pose = torch.cat((pos_cur,orn_cur,dof_pos),dim = 2).to(device=args.graphics_device_id)
+        full_pose = torch.cat((pos_cur,orn_cur,dof_pos7),dim = 2).to(device=args.graphics_device_id)
         # stacking onto the 0 dimension, each acquisition        
         buffer_position = torch.cat((buffer_position, full_pose), 0)  
         pos_desired=pos_des.to("cpu").view( 1,num_envs, 3) 
@@ -825,8 +896,8 @@ for iter_run in range(num_of_runs):
 
         ll = torch.tensor(franka_lower_limits[:7]).repeat(num_envs,1) 
         ul = torch.tensor(franka_upper_limits[:7]).repeat(num_envs,1) 
-        saturation_ll = torch.nonzero(abs(dof_pos-ll) < 0.05)
-        saturation_ul = torch.nonzero(abs(dof_pos-ul) < 0.05)
+        saturation_ll = torch.nonzero(abs(dof_pos7-ll) < 0.05)
+        saturation_ul = torch.nonzero(abs(dof_pos7-ul) < 0.05)
 
         if saturation_ll.shape[0] != 0:
             abnormal_idxs = saturation_ll.shape[0]
@@ -854,22 +925,24 @@ for iter_run in range(num_of_runs):
 
         if itr == max_iteration:
 
-            plotter.plot()
-            
             saturation_idxs = list(set(saturated_ul_idxs + saturated_ll_idxs))
-            print("\n----Number of saturated simulations: ",len(saturation_idxs),"/", num_envs,"----\n" ) 
+            print("\n----Number of saturated simulations: ",len(saturation_idxs),"/", num_envs,"----\n" )
+            # print(saturation_idxs)
 
             out_of_range_quaternion = list(set(out_of_range_quaternion))
             # this is the numbers of the colliding simulations
-            print("---- Number of simulations with abnormal change in quaternions: ",len(out_of_range_quaternion),"/", num_envs,"----\n" )  
+            print("---- Number of simulations with abnormal change in quaternions: ",len(out_of_range_quaternion),"/", num_envs,"----\n" )
+            # print(out_of_range_quaternion)
+
             print("---- Number of the colliding simulations: ",len(black_list),"/", num_envs,"----\n" ) 
+            # print(black_list)
 
             # Maybe a colliding env and abnormal change env coincide! Use always set
             black_list = black_list + out_of_range_quaternion + saturation_idxs 
             black_list = list(set(black_list))
             failed_percentage = len(black_list)/num_envs*100
-            print("\n---- Number of bad simulations: ",len(black_list),"/", num_envs,"----\n" )  
-            print("Percentage of total discarded simulations:", round(failed_percentage,2), "%") 
+            print("\n---- Number of bad simulations: ",len(black_list),"/", num_envs,"----\n")
+            print("Percentage of total discarded simulations:", round(failed_percentage,2), "%")
 
             #---- excluding all the invalid environment from the simulation ------ 
             non_valid_envs = len(black_list)
@@ -899,6 +972,8 @@ for iter_run in range(num_of_runs):
                 
                 buffer_position = torch.cat((buffer_position [:,:row_exclude,:],
                     buffer_position [:,row_exclude+1:,:]),1)
+
+            plotter.plot_with_slider()
 
     
     # --------------------------------- SAVING THE BUFFERS ----------------------------------------------------
