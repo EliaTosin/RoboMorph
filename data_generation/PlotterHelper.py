@@ -23,6 +23,7 @@ class Plotter():
         self.dof_colors = ['dodgerblue', 'limegreen', 'tomato', 'magenta', 'darkorange', 'chocolate', 'gold']
 
         self.fig, self.axes = plt.subplots(4, 2, figsize=(14, 10), sharex=True)
+        self.fig.subplots_adjust(left=0.05, right=0.85, wspace=0.4, hspace=0.5)
         self.axes = self.axes.flatten()  # Flatten to easily iterate over
 
     def add_desired_pose(self, pos_des):
@@ -146,13 +147,14 @@ class Plotter():
             if i in [6, 7]:
                 ax.set_xlabel("Timesteps")
 
+            ax.autoscale(enable=True, axis='y')
+
         # Disattiva eventuale subplot extra
         if len(self.axes) > 8:
             for ax in self.axes[8:]:
                 ax.axis('off')
 
         # Aggiorna il layout
-        self.fig.tight_layout(rect=[0, 0, 1, 0.95])  # lascia spazio per il titolo
         plt.draw()
 
     def plot_with_slider(self):
