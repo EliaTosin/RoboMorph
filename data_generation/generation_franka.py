@@ -594,17 +594,17 @@ for iter_run in range(num_of_runs):
                 # offset =  torch.sign(torch.rand(1).uniform_(-0.3,0.3)).to(device=args.graphics_device_id)
             #This was used for testC!
             if  type_of_task == 'VS': # Vertical spyral
-                pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / period) * radius 
+                pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / period) * radius
                 pos_des[:, 1] = init_pos[:, 1] + math.cos(itr / period) * radius
                 pos_des[:, 2] = init_pos[:, 2] - 0.1 + sign * z_speed * itr/max_iteration
             elif type_of_task == 'FS':
                 radius = 0.1           # Fixed spyral
-                pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / 80) * radius 
+                pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / 80) * radius
                 pos_des[:, 1] = init_pos[:, 1] + math.cos(itr / 80) * radius
                 pos_des[:, 2] = init_pos[:, 2] + - 0.1 + 0.2 * itr/max_iteration
             elif type_of_task == 'FC': # Fixed circle
                 # radius = 0.1
-                pos_des[:, 0] = init_pos[:, 0] 
+                pos_des[:, 0] = init_pos[:, 0]
                 pos_des[:, 1] = init_pos[:, 1] + math.sin(itr / 50) * radius #EDITED
                 pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 50) * radius #EDITED
 
