@@ -118,6 +118,22 @@ def check_collisions(sim, gym, black_list, bodbody_names, body_links=11):
 
     return black_list
 
+# spawn_target_sphere_for_env(gym, sim, env, num_envs, target_pose=hand_pose (gymapi.Transform(), not position), headless=headless_mode)
+def spawn_target_sphere_for_env(gym, sim, env, num_envs, target_pose, sphere_radius=0.05, headless=False):
+    if headless:
+        return
+    # Creazione della geometria della sfera
+    asset_options = gymapi.AssetOptions()
+    asset_options.density = 0.
+    asset_options.disable_gravity = True
+    asset_options.fix_base_link = True
+    sphere_asset = gym.create_sphere(sim, sphere_radius, asset_options)
+
+    sphere_handle = gym.create_actor(env, sphere_asset, target_pose, "sphere", num_envs+1, 0)
+
+    # set ball color
+    color = gymapi.Vec3(1.0, 0., 0.)
+    gym.set_rigid_body_color(env, sphere_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, color)
 
 # set random seed
 np.random.seed(42)
