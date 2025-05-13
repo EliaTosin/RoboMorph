@@ -219,15 +219,18 @@ def numerical_gradient_q0(dof_pos_prev, dof_pos, j_eef, q0_prev, k0=0.01, epsilo
 
     return k0 * grad_w
 
-def redundant_manipulator_ik2(dof_pos_prev, dof_pos, j_eef, des_vel, d_pose, num_envs, q0_prev):
+def redundant_manipulator_ik2(dof_pos_prev, dof_pos, j_eef, des_vel, d_pose, num_envs, q0_prev, damping=0.05):
     # solve redundant manipulator ik (formula 3.72 pag 154 siciliano)
     I = torch.eye(9, device=args.graphics_device_id)
     j_eef_pinv = torch.linalg.pinv(j_eef)
 
+    j_eef_T = torch.transpose(j_eef, 1, 2)
+    lmbda = torch.eye(6, device=args.graphics_device_id) * (damping ** 2)
+    j_damped = j_eef_T @ torch.inverse(j_eef @ j_eef_T + lmbda)
+
     q0 = numerical_gradient_q0(dof_pos_prev, dof_pos, j_eef, q0_prev)
 
-    e_dot = j_eef_pinv @ (des_vel + d_pose)
-    # e_dot = j_eef_pinv @ d_pose
+    e_dot = j_damped @ (des_vel + d_pose)
     q0_constraint = (I - j_eef_pinv @ j_eef) @ q0
 
     u = e_dot + q0_constraint
@@ -413,9 +416,6 @@ for iter_run in range(num_of_runs):
             default_dof_state["pos"][0] =  magnitude * np.sign(torch.rand(1).uniform_(-1,1).numpy()) * torch.rand(1).uniform_(franka_lower_limits[0],franka_upper_limits[0]).numpy() 
             default_dof_state["pos"][1:7] = franka_mids[1:7] + np.sign(torch.rand(1).uniform_(-1,1).numpy()) * 0.25 * torch.rand(6).numpy()
 
-            # default_dof_state["pos"][0] = 0.2 * torch.rand(1).uniform_(franka_lower_limits[0],franka_upper_limits[0]).numpy() 
-            # default_dof_state["pos"][1:7] = franka_mids[1:7] + 0.1 * torch.rand(6).numpy()
-
         plotter.add_joint_init_pos(default_dof_state["pos"][:7])
         default_dof_state[7:] = franka_upper_limits[7:]
         gym.set_actor_dof_states(env, franka_handle, default_dof_state , gymapi.STATE_ALL)
@@ -466,15 +466,6 @@ for iter_run in range(num_of_runs):
                 rigid_body_properties[l].mass = rigid_body_properties[l].mass * torch.rand(1).uniform_(lower_bound,higher_bound).numpy()
                 link_mass_tensor[l]=rigid_body_properties[l].mass
 
-                # if random_coms:
-                #     # rigid_body_properties[l].com.x = rigid_body_properties[l].com.x * torch.rand(1).uniform_(0.85,1.15).numpy() # np.random.uniform(0.85, 1.15)
-                #     # rigid_body_properties[l].com.y = rigid_body_properties[l].com.y * torch.rand(1).uniform_(0.85,1.15).numpy() # np.random.uniform(0.85, 1.15)
-                #     # rigid_body_properties[l].com.z = rigid_body_properties[l].com.z * torch.rand(1).uniform_(0.85,1.15).numpy() # np.random.uniform(0.85, 1.15)
-                #     # # WIP - is there a way to compute inertia from xyz and coms? 
-                #     # rigid_body_properties[l].inertia.x = rigid_body_properties[l].inertia.x * torch.rand(1).uniform_(0.85,1.15).numpy() # np.random.uniform(0.85, 1.15)
-                #     # rigid_body_properties[l].inertia.y = rigid_body_properties[l].inertia.y * torch.rand(1).uniform_(0.85,1.15).numpy() # np.random.uniform(0.85, 1.15)
-                #     # rigid_body_properties[l].inertia.z = rigid_body_properties[l].inertia.z * torch.rand(1).uniform_(0.85,1.15).numpy() #np.random.uniform(0.85, 1.15)
-                    
                 update = gym.set_actor_rigid_body_properties(env, franka_handle, rigid_body_properties,0)
 
                 if not update:
@@ -650,22 +641,26 @@ for iter_run in range(num_of_runs):
     dof_pos_prev = None
     q0_prev = None
 
+    time_max_iteration = max_iteration * sim_params.dt
+
     ## START LOOP 🔄🔄
     while not condition_window  and itr <= max_iteration-1:
     # while not gym.query_viewer_has_closed(viewer):  #ORIGINAL
 
         itr += 1
+        time_itr = itr * sim_params.dt
+
         # Update jacobian and mass matrix and contact collection
         gym.refresh_rigid_body_state_tensor(sim)
         gym.refresh_dof_state_tensor(sim)
         gym.refresh_jacobian_tensors(sim)
         gym.refresh_mass_matrix_tensors(sim)
-        gym.refresh_net_contact_force_tensor(sim) 
+        gym.refresh_net_contact_force_tensor(sim)
 
         # Get current hand poses
         pos_cur = rb_states[hand_idxs, :3]
         orn_cur = rb_states[hand_idxs, 3:7]
-        
+
         # Set desired hand positions # ORIGINAL
         """E: CIRCLE OR SPIRAL"""
         if  osc_task == True:
@@ -676,7 +671,7 @@ for iter_run in range(num_of_runs):
                 sign = torch.sign(torch.rand(1).uniform_(-1,1)).to(device=args.graphics_device_id)
                 # offset =  torch.sign(torch.rand(1).uniform_(-0.3,0.3)).to(device=args.graphics_device_id)
                 vel_des = torch.zeros((num_envs, 6), device=args.graphics_device_id)
-
+                time_period = period * sim_params.dt
             #This was used for testC!
             if  type_of_task == 'VS': # Vertical spyral
                 pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / period) * radius
@@ -684,23 +679,39 @@ for iter_run in range(num_of_runs):
                 # pos_des[:, 2] = init_pos[:, 2] - 0.1 + sign * z_speed * itr/max_iteration
                 pos_des[:, 2] = init_pos[:, 2] + sign * z_speed * itr / max_iteration
 
-                vel_des[:, 0] = radius * math.cos(itr / period)
-                vel_des[:, 1] = radius * math.sin(itr / period)
-                vel_des[:, 2] = z_speed * sign * itr / max_iteration
+                vel_des[:, 0] = radius * math.cos(itr) / period
+                vel_des[:, 1] = radius * -math.sin(itr) / period
+                vel_des[:, 2] = z_speed * sign / max_iteration
             elif type_of_task == 'FS':
                 radius = 0.1           # Fixed spyral
                 pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / 80) * radius
                 pos_des[:, 1] = init_pos[:, 1] + math.cos(itr / 80) * radius
                 pos_des[:, 2] = init_pos[:, 2] + - 0.1 + 0.2 * itr/max_iteration
+
+                vel_des[:, 0] = radius * math.cos(itr) / 80
+                vel_des[:, 1] = radius * -math.sin(itr) / 80
+                vel_des[:, 2] = - 0.1 + 0.2 / max_iteration
             elif type_of_task == 'FC': # Fixed circle
                 # radius = 0.1
                 pos_des[:, 0] = init_pos[:, 0]
                 pos_des[:, 1] = init_pos[:, 1] + math.sin(itr / 50) * radius #EDITED
                 pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 50) * radius #EDITED
-            elif type_of_task == 'ELIA':
+
+                vel_des[:, 1] = radius * math.cos(itr) / 50
+                vel_des[:, 2] = radius * -math.sin(itr) / 50
+            elif type_of_task == 'FIX':
                 pos_des[:, 0] = init_pos[:, 0]
                 pos_des[:, 1] = init_pos[:, 1]
-                pos_des[:, 2] = init_pos[:, 2] + 0.2
+                pos_des[:, 2] = init_pos[:, 2]
+            elif type_of_task == 'EC': # Circle starting from the eef position on YZ
+                w0 = 1/time_period
+                alpha = 0
+                pos_des[:, 0] = init_pos[:, 0]
+                pos_des[:, 1] = init_pos[:, 1] + radius * math.cos(w0*time_itr + math.pi + alpha) + radius * math.cos(alpha)
+                pos_des[:, 2] = init_pos[:, 2] + radius * math.sin(w0*time_itr + math.pi + alpha) + radius * math.sin(alpha)
+
+                vel_des[:, 1] = -w0 * radius * math.sin(w0*time_itr + math.pi + alpha)
+                vel_des[:, 2] = w0 * radius * math.cos(w0*time_itr + math.pi + alpha)
 
             # pos_des[:, 0] = init_pos[:, 0] - 0.05
             # pos_des[:, 1] = init_pos[:, 1] + math.sin(itr / 50) * 0.15
@@ -712,46 +723,34 @@ for iter_run in range(num_of_runs):
             plotter.add_desired_pose(pos_des)
             plotter.add_actual_pose(pos_cur)
 
-            """
-            m_inv__cart = torch.inverse(mm) --> 32,9,9 #inversa della mass matrix (passa da giunti a cartesiano)
-            m_eef__joints = torch.inverse(j_eef @ m_inv @ torch.transpose(j_eef, 1, 2)) --> 32,6,6 #sposta mass matrix sull'eef = matrice 6x6 che descrive come si comporta endeff nel mondo 
-            orn_cur /= torch.norm(orn_cur, dim=-1).unsqueeze(-1) --> 32,4 #normalizza quaternione orientamento (evita errori numerici)
-            orn_err = orientation_error(orn_des, orn_cur) --> 32,3 #tira fuori errori di orientamento rispetto al target sui 3 assi 
-            pos_err = kp * (pos_des - pos_cur) --> 32,3 # calcola errore di posizione e lo moltiplica a kp (quanto voglio che il robot si muova velocemente verso errore)
-            dpose = torch.cat([pos_err, orn_err], -1) --> 32,6 # concatena errore di pos e quello di orientamento (6 assi)
-            u = torch.transpose(j_eef, 1, 2) @ m_eef @ (kp * dpose).unsqueeze(-1) - kv * mm @ dof_vel 
-            --> 32,9,1 # converte j_eef da forza (cart) a coppia (joints), porto m_eef in joints [j_eef @ m_eef] <-> quanta coppia devo fare per stare in quella posa
-                moltiplica per pos desiderata (coppia per arrivare li al target). la seconda parte considerando velocità attuali dei giunti, si calcola inerzie dei giunti [mm @ dof_vel] e le moltiplica.
-                questo serve a compensare le velocità attuali e non andare oltre il target, ripetendo cosi l'errore all'infinito.
-                tutto assieme questo da le coppie ai giunti per arrivare a quella posizione
-            """
-
             ## ⚠️⚠️ QUI ORA INVECE DI OSC SI USA KIN INV PER TROVARE POS JOINT DA POS+OR
-            m_inv = torch.inverse(mm)
-            m_eef = torch.inverse(j_eef @ m_inv @ torch.transpose(j_eef, 1, 2))
-            orn_err = orientation_error(orn_des, orn_cur)
+            kp = 100 #TODO PARAM DA RANDOMIZZARE?
+            kp_orn = 100
+            orn_err = kp_orn * orientation_error(orn_des, orn_cur)
 
-            kp = 2 #TODO PARAM DA RANDOMIZZARE?
             pos_err = kp * (pos_des - pos_cur)
             dpose = torch.cat([pos_err, orn_err], -1).unsqueeze(-1)
 
-            control_formula = "damped"
+            control_formula = "classic"
             if control_formula == "damped":
-                delta_u = damped_least_squared_ik(dpose, j_eef, num_envs)
+                delta_u = damped_least_squared_ik(dpose, j_eef, num_envs) * sim_params.dt
                 u = dof_states[:, 0].view(num_envs, 9)
                 u += delta_u
                 u[:, 7:] = franka_mids[7].item() # setting the positions of the finger joints at the middle point to not collide
                 u = u.unsqueeze(-1).contiguous() # so it can be wrapped into a gymtorch tensor
             elif control_formula == "redundant":
-                u, q0 = redundant_manipulator_ik2(dof_pos_prev, dof_pos, j_eef, vel_des.unsqueeze(-1), dpose, num_envs, q0_prev)
+                delta_u, q0 = redundant_manipulator_ik2(dof_pos_prev, dof_pos, j_eef, vel_des.unsqueeze(-1), dpose, num_envs, q0_prev)
 
+                delta_u = delta_u * sim_params.dt
+                u = dof_states[:, 0].view(num_envs, 9) + delta_u.squeeze(-1)
                 u[:, 7:] = franka_mids[7].item()
-                redundant_u = u.contiguous() # so it can be wrapped into a gymtorch tensor
+                u = u.unsqueeze(-1).contiguous() # so it can be wrapped into a gymtorch tensor
             elif control_formula == "classic": # using classic ik
-                u = classic_ik(dpose, j_eef)
+                delta_u = classic_ik(dpose, j_eef) * sim_params.dt
+                u = dof_states[:, 0].view(num_envs, 9) + delta_u.squeeze(-1)
 
                 u[:, 7:] = franka_mids[7].item()
-                ik_u = u.contiguous()  # so it can be wrapped into a gymtorch tensor
+                u = u.unsqueeze(-1).contiguous()  # so it can be wrapped into a gymtorch tensor
 
     # ------------------------------------- APPLICATION OF U -------------------------------------------------
         """E:
@@ -775,7 +774,7 @@ for iter_run in range(num_of_runs):
         #body contact contains all the nonzero indeces about contact forces
         body_contact = torch.nonzero(abs(contact_forces)>0.01)
 
-        # This for processes in all the istant of the simulation the indexes to be taken into account: 
+        # This for processes in all the istant of the simulation the indexes to be taken into account:
         # Anyway, in the black list they enter only the first time.
 
         for j in range(body_contact.shape[0]):
@@ -802,7 +801,7 @@ for iter_run in range(num_of_runs):
                     gym.set_rigid_body_color(env_handle,franka_handle, k , mesh ,color)
 
         # -------------------------------------- Step the physics --------------------------------------------------
-        
+
         gym.simulate(sim)
         gym.fetch_results(sim, True)
 
@@ -820,17 +819,17 @@ for iter_run in range(num_of_runs):
             # gym.sync_frame_time(sim)
 
         # --------------------------------------- Stacking in the buffers -------------------------------------------------
-            
+
         if control_imposed and control_imposed_file:
                 #from file
                 if itr==1:
                     print("\n Torque Imposed by FILE")
                 control_action = u
-        
+
         elif control_imposed and not control_imposed_file:
             if itr==1:
                 print("\n Torque Imposed by function")
-            control_action = u 
+            control_action = u
             control_action = control_action.view(1,num_envs,9)
             control_action = control_action[:,:,:joints]
 
@@ -845,9 +844,9 @@ for iter_run in range(num_of_runs):
             control_action = torch.cat((control_action,dynamical_inclusion),dim=2)
 
         if control_imposed_file or osc_task:
-            buffer_control_action = torch.cat((buffer_control_action, control_action), 2)  
-        else: 
-            buffer_control_action = torch.cat((buffer_control_action, control_action), 0) 
+            buffer_control_action = torch.cat((buffer_control_action, control_action), 2)
+        else:
+            buffer_control_action = torch.cat((buffer_control_action, control_action), 0)
 
         # cloning previous values for redundant manipulator control
         if dof_pos_prev is not None and q0_prev is not None:
@@ -869,9 +868,9 @@ for iter_run in range(num_of_runs):
         # -------------------------- INCLUDING dof_pos for 7 - dimension state space -------------------------------
 
         full_pose = torch.cat((pos_cur,orn_cur,dof_pos7),dim = 2).to(device=args.graphics_device_id)
-        # stacking onto the 0 dimension, each acquisition        
-        buffer_position = torch.cat((buffer_position, full_pose), 0)  
-        pos_desired=pos_des.to("cpu").view( 1,num_envs, 3) 
+        # stacking onto the 0 dimension, each acquisition
+        buffer_position = torch.cat((buffer_position, full_pose), 0)
+        pos_desired=pos_des.to("cpu").view( 1,num_envs, 3)
         if osc_task:
             buffer_target = torch.cat((buffer_target, pos_desired), 0)  #target position
 
@@ -887,15 +886,15 @@ for iter_run in range(num_of_runs):
             #These are the out of range simulations
             out_of_range = torch.nonzero(increment > .1) #  np.rad2deg(.15) = 9°
 
-            if out_of_range.shape[0] != 0:   
+            if out_of_range.shape[0] != 0:
                 abnormal_idxs = out_of_range.shape[0]
                 for j in range(out_of_range.shape[0]):
                     out_of_range_quaternion.append(int(out_of_range[j,0].to('cpu').numpy()))
 
         # ---------------------------- Saturation check | Position --------------------------------------------------
 
-        ll = torch.tensor(franka_lower_limits[:7]).repeat(num_envs,1) 
-        ul = torch.tensor(franka_upper_limits[:7]).repeat(num_envs,1) 
+        ll = torch.tensor(franka_lower_limits[:7]).repeat(num_envs,1)
+        ul = torch.tensor(franka_upper_limits[:7]).repeat(num_envs,1)
         saturation_ll = torch.nonzero(abs(dof_pos7-ll) < 0.05)
         saturation_ul = torch.nonzero(abs(dof_pos7-ul) < 0.05)
 
@@ -911,7 +910,7 @@ for iter_run in range(num_of_runs):
 
         # ---------------------------- Saturation check | Torque --------------------------------------------------
         if osc_task:
-            torques_limit = torch.tensor(franka_effort_limits[:7]).repeat(num_envs,1).to(device=args.graphics_device_id) 
+            torques_limit = torch.tensor(franka_effort_limits[:7]).repeat(num_envs,1).to(device=args.graphics_device_id)
             saturation_torques = torch.nonzero( (torques_limit - abs(control_action.squeeze(-1)[:,:7]) ) < 1)
 
             if saturation_torques.shape[0] != 0:
@@ -920,7 +919,7 @@ for iter_run in range(num_of_runs):
                     saturated_ul_idxs.append(int(saturation_torques[j,0].to('cpu').numpy())) # append in another
 
         # ------------------------------------ CLEANING BUFFERS --------------------------------------------
-        
+
         ## in this block, all the envs that have collided at least one step, are removed from the acquisitioncle
 
         if itr == max_iteration:
@@ -949,14 +948,7 @@ for iter_run in range(num_of_runs):
             num_valid_envs = num_envs - non_valid_envs
 
             black_list.sort(reverse=True)
-            # for i in range(non_valid_envs):
 
-            #     row_exclude = black_list[i]
-            #     buffer_control_action = torch.cat((buffer_control_action [:,:row_exclude,:],
-            #                                             buffer_control_action [:,row_exclude+1:,:]),1)
-            #     buffer_position = torch.cat((buffer_position [:,:row_exclude,:],
-            #                                             buffer_position [:,row_exclude+1:,:]),1)
-                
             for i in range(non_valid_envs):
 
                 row_exclude = black_list[i]
