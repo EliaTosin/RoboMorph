@@ -31,14 +31,14 @@ args = gymutil.parse_arguments(description="Data Generation for multiple Franka 
         custom_parameters=[
         {"name": "--num-envs", "type": int, "default": 32, "help": "Number of environments to create"},
         #General
-        {"name": "--disable-gravity-flag", "type": gymutil.parse_bool, "const": True, "default": False, "help": "If False, the gravity is not manually compensated"},  
+        {"name": "--disable-gravity-flag", "type": gymutil.parse_bool, "const": True, "default": False, "help": "If False, the gravity is not manually compensated"},
         {"name": "--control-imposed", "type": gymutil.parse_bool, "const": True, "default": False, "help": "If False, it does the xy circle - task or waypoint"},
         {"name": "--control-imposed-file", "type": gymutil.parse_bool, "const": True, "default": False, "help": "If False, it does the xy circle - task or waypoint"},
         {"name": "--osc-task", "type": gymutil.parse_bool, "const": True, "default": True, "help": "if False, waypoints are generated"},
         {"name": "--type-of-task", "type": str, "default": 'VS', "help": "'VS','FS','FC'"},
-        {"name": "--random-kp-kv", "type": gymutil.parse_bool, "const": True, "default": False, "help": "Random kp and kv"},      
+        {"name": "--random-kp-kv", "type": gymutil.parse_bool, "const": True, "default": False, "help": "Random kp and kv"},
         {"name": "--dynamical-inclusion-flag", "type": gymutil.parse_bool, "const": True, "default": False, "help": "Include/exclude masses from input tensor"},
-        
+
         # Display Window, Save tensors, show figures
         {"name": "--headless-mode", "type": gymutil.parse_bool, "const": True, "default": True, "help": "Hide the simulation window (Faster)"},
         {"name": "--plot-diagrams", "type": gymutil.parse_bool, "const": True, "default": False, "help": "Plot Diagrams of u an y tensors"},
@@ -56,8 +56,8 @@ args = gymutil.parse_arguments(description="Data Generation for multiple Franka 
         # Model settings
         {"name": "--tot-coordinates", "type": int, "default": 14, "help": "Stands for (x,y,z) + quaternions + 7 joints space"},
         {"name": "--joints", "type": int, "default": 9, "help": "Actual number of dofs in which we are interested (arms)"},
-        {"name": "--body-links", "type": int, "default": 11, "help": "This represents the number of links (fingers included)"},  
-        # Input settings 
+        {"name": "--body-links", "type": int, "default": 11, "help": "This represents the number of links (fingers included)"},
+        # Input settings
         {"name": "--type-of-input", "type": str, "default": 'multi_sinusoidal', "help": "'combination','chirp','multi_sinusoidal'"},
         {"name": "--frequency", "type": float, "default": 0.1, "help": "Master frequency of the imposed control action"},
         # Simulation parameters
@@ -81,7 +81,7 @@ type_of_task = args.type_of_task
 plot_diagrams = args.plot_diagrams                                # If True, could take much more time
 plot_only_torques = args.plot_only_torques                        # if False it plots also the value of masses
 
-random_initial_positions = args.random_initial_positions         
+random_initial_positions = args.random_initial_positions
 random_stiffness_dofs = args.random_stiffness_dofs
 random_masses = args.random_masses
 random_coms = args.random_coms
@@ -95,14 +95,14 @@ tot_coordinates = args.tot_coordinates                            # Stands for (
 joints = args.joints                                              # This represents the actual number of dofs
 body_links = args.body_links
 
-# Important for simulation 
+# Important for simulation
 headless_mode = args.headless_mode                                # if False, displays the simulation window
-save_tensors = args.save_tensors 
+save_tensors = args.save_tensors
 dynamical_inclusion_flag = args.dynamical_inclusion_flag          # This include/exclude masses from input tensor
 type_of_dataset = args.type_of_dataset                            # This is the subfolder in which we want to save ['train' or 'test' ]
 frequency = args.frequency                                        # master frequency
 num_envs = args.num_envs                                          # number of robots in each run
-num_of_runs = args.num_of_runs                                    # number of runs 
+num_of_runs = args.num_of_runs                                    # number of runs
 max_iteration = args.max_iteration                                # number of time_steps in simulation
 
 # use_pos_control = args.use_pos_control
@@ -119,19 +119,19 @@ name_of_test_file = '12_envs_32_steps_1000_f_0_1_MS_rand_0010_bounds_mass_15_15.
 # disable_gravity_flag = False              # if False, the gravity isn't manually compensated
 # headless_mode = False                    # if False, displays the simulation window
 
-# control_imposed = True         
+# control_imposed = True
 # control_imposed_file = False
 # osc_task = False
 
-# headless_mode= False 
-# control_imposed = False         
+# headless_mode= False
+# control_imposed = False
 # control_imposed_file = False
 # osc_task = True
 # type_of_task = 'FS'
 # random_initial_positions = True
 # random_masses = True
-# save_tensors = True 
-# num_envs = 32  
+# save_tensors = True
+# num_envs = 32
 # save_tensors = False
 
 # plot_diagrams=True
@@ -140,7 +140,7 @@ name_of_test_file = '12_envs_32_steps_1000_f_0_1_MS_rand_0010_bounds_mass_15_15.
 # frequency = .15
 # type_of_input = 'chirp'
 
-# control_imposed = True         
+# control_imposed = True
 # control_imposed_file = True
 # osc_task = False
 
@@ -161,19 +161,19 @@ name_of_test_file = '12_envs_32_steps_1000_f_0_1_MS_rand_0010_bounds_mass_15_15.
 # joints = 9                              # This represents the actual number of dofs
 # body_links = 11
 
-# # Important for simulation 
-# save_tensors = True 
+# # Important for simulation
+# save_tensors = True
 # dynamical_inclusion_flag = False        # This include/exclude masses from input tensor
 # type_of_dataset = 'train'               # This is the subfolder in which we want to save ['train' or 'test' ]
 # frequency = .1                           # master frequency
 # num_envs = 32                       # number of robots in each run
-# num_of_runs = 1                        # number of runs 
+# num_of_runs = 1                        # number of runs
 # max_iteration = 1000                    # number of time_steps in simulation
 
 # ---------------------------------------------------------------------------------------------------------
 
 if control_imposed_file:
-    max_iteration = max_iteration - 1 
+    max_iteration = max_iteration - 1
 
 # IF there's an imposition from file which had gravity, it must consider it the robot.
 if control_imposed_file and ('no_gravity' in name_of_test_file) == False:
@@ -254,7 +254,7 @@ for iter_run in range(num_of_runs):
     #check if the output directory is present, otherwise create them.
     if type_of_dataset=='test': complementary_folder = 'train'
     elif type_of_dataset=='train': complementary_folder = 'test'
-    
+
     out_folder = Path("./out_tensors/")
     out_folder.mkdir(exist_ok=True)
 
@@ -263,31 +263,31 @@ for iter_run in range(num_of_runs):
     _complementary_folder = Path("./out_tensors/"+complementary_folder)
     _complementary_folder.mkdir(exist_ok=True)
 
-    # Check if in the other folder's is present the same seed 
+    # Check if in the other folder's is present the same seed
     copies = True
-    
+
     # print(args.seed)
     # if args.seed == 0:
     generated_seed = np.random.randint(0,9999)
     # else:
     #     generated_seed = args.seed
-    
+
     print("\nGenerated seed: "+str(generated_seed))
 
-    while copies:    
+    while copies:
         #look in the other folder's is present the same seed
         list_of_tensors = os.listdir("./out_tensors/"+complementary_folder)
         generated_seed_str = 'seed_'+str(generated_seed)
         if any(generated_seed_str in s for s in list_of_tensors):
             generated_seed = np.random.randint(0,9999)
             print("\nCurrent Folder: "+type_of_dataset+" --> Found the same seed in "+complementary_folder)
-            print("\nGenerated seed:"+str(generated_seed)) 
+            print("\nGenerated seed:"+str(generated_seed))
         else:
             copies=False
 
     torch.manual_seed(generated_seed) # Variable seed for each big iteration - reproducibility!
 
-    #------------------------------------------------------------------------------------------------         
+    #------------------------------------------------------------------------------------------------
     print("\n ---------- This is run number :",iter_run, "----------")
 
     # ====================================== Simulation Settings  ==========================================
@@ -295,7 +295,7 @@ for iter_run in range(num_of_runs):
     gym = gymapi.acquire_gym()
 
     # Configure sim
-    type_of_contact = gymapi.ContactCollection.CC_LAST_SUBSTEP 
+    type_of_contact = gymapi.ContactCollection.CC_LAST_SUBSTEP
 
     sim_params = gymapi.SimParams()
     sim_params.up_axis = gymapi.UP_AXIS_Z
@@ -332,7 +332,7 @@ for iter_run in range(num_of_runs):
     gym.add_ground(sim, plane_params)
 
     # Load franka asset
-    asset_root = "./" 
+    asset_root = "./"
     # Specify the folder of the Franka urdf file
     franka_asset_file = "franka_description/robots/franka_panda.urdf"
 
@@ -352,7 +352,7 @@ for iter_run in range(num_of_runs):
     franka_lower_limits = franka_dof_props['lower']
     franka_upper_limits = franka_dof_props['upper']
     franka_ranges = franka_upper_limits - franka_lower_limits
-    franka_mids =  0.5 * (franka_upper_limits + franka_lower_limits) 
+    franka_mids =  0.5 * (franka_upper_limits + franka_lower_limits)
     franka_num_dofs = len(franka_dof_props)
 
     # set default DOF states
@@ -379,16 +379,16 @@ for iter_run in range(num_of_runs):
 
     if random_coms or random_masses:
         try:
-            
+
             lower_bound = args.lower_bound_mass
             higher_bound = args.higher_bound_mass
             # comma_idx=random_bounds.index('')
             lower_bound = 1 - (args.lower_bound_mass)/100
             higher_bound = 1 + (args.higher_bound_mass)/100
-            
-            print('\n Mass randomization - Lower bound -->'+str(round(lower_bound,2)) 
+
+            print('\n Mass randomization - Lower bound -->'+str(round(lower_bound,2))
                   +' | Higher bound -->' +str(round(higher_bound,2)))
-  
+
         except ValueError:
             print('Incorrect or missing Bounds | Default values +-15%')
             lower_bound_mass = 0.85
@@ -406,14 +406,14 @@ for iter_run in range(num_of_runs):
         # Add franka
         franka_handle = gym.create_actor(env, franka_asset, pose, "franka", i, 0) # from 1 to 0
 
-        #set DOF initial position 
+        #set DOF initial position
 
         if  not random_initial_positions:
             default_dof_state["pos"][:7] = franka_mids[:7]
         else:
             #magnitude controls "how" far is from middle position (0.5 is mids)
             magnitude = torch.rand(1).uniform_(0.2,0.8).numpy()
-            default_dof_state["pos"][0] =  magnitude * np.sign(torch.rand(1).uniform_(-1,1).numpy()) * torch.rand(1).uniform_(franka_lower_limits[0],franka_upper_limits[0]).numpy() 
+            default_dof_state["pos"][0] =  magnitude * np.sign(torch.rand(1).uniform_(-1,1).numpy()) * torch.rand(1).uniform_(franka_lower_limits[0],franka_upper_limits[0]).numpy()
             default_dof_state["pos"][1:7] = franka_mids[1:7] + np.sign(torch.rand(1).uniform_(-1,1).numpy()) * 0.25 * torch.rand(6).numpy()
 
         plotter.add_joint_init_pos(default_dof_state["pos"][:7])
@@ -428,7 +428,7 @@ for iter_run in range(num_of_runs):
             franka_dof_props["stiffness"][:7].fill(400.0)
             franka_dof_props["damping"][:7].fill(40.0)
         else:
-            lower_bound_damping,higher_bound_damping,lower_random_stiff,higher_bound_stiff =  5, 10 ,0.01, 0.05 # 0.1, 0.5 ,0.01, 0.05 
+            lower_bound_damping,higher_bound_damping,lower_random_stiff,higher_bound_stiff =  5, 10 ,0.01, 0.05 # 0.1, 0.5 ,0.01, 0.05
             # Generating random arrays
             random_stiff = np.random.uniform(lower_random_stiff,higher_bound_stiff,7)
             random_damping = np.random.uniform(lower_bound_damping,higher_bound_damping,7)
@@ -445,7 +445,7 @@ for iter_run in range(num_of_runs):
 
         gym.set_actor_dof_properties(env, franka_handle, franka_dof_props)
 
-        # Set random mass and centers of masses for each link 
+        # Set random mass and centers of masses for each link
         if not random_masses:
 
             # Acquire the rigid body properties of each env
@@ -471,9 +471,9 @@ for iter_run in range(num_of_runs):
                 if not update:
                     print("Failed to overwrite link randomization.")
 
-        #Stacking the dynamical values onto dimension 0             
+        #Stacking the dynamical values onto dimension 0
         dynamical_inclusion = torch.cat( (dynamical_inclusion,link_mass_tensor.unsqueeze(0)) , dim = 0)
-                        
+
         # Get inital hand pose
         hand_handle = gym.find_actor_rigid_body_handle(env, franka_handle, "panda_hand")
         hand_pose = gym.get_rigid_transform(env, hand_handle)
@@ -490,9 +490,9 @@ for iter_run in range(num_of_runs):
 
     print("Stiffness", franka_dof_props["stiffness"][:7])
     print("Dampings", franka_dof_props["damping"][:7])
-    
+
     print("\n--- Succesfully Created %d environments ----" % num_envs)
-    
+
     if not headless_mode:
         # Point camera at middle env
         cam_pos = gymapi.Vec3(4, 4, 4) # gymapi.Vec3(4, 3, 3)
@@ -553,8 +553,8 @@ for iter_run in range(num_of_runs):
         kp = 10
         kv = 2 * math.sqrt(kp)
     else:
-        kp=torch.FloatTensor(num_envs, 1).uniform_(1, 5).to(device=args.graphics_device_id) 
-        kv=torch.FloatTensor(num_envs, 1).uniform_(1,2 * math.sqrt(5)).to(device=args.graphics_device_id) 
+        kp=torch.FloatTensor(num_envs, 1).uniform_(1, 5).to(device=args.graphics_device_id)
+        kv=torch.FloatTensor(num_envs, 1).uniform_(1,2 * math.sqrt(5)).to(device=args.graphics_device_id)
 
     # Rigid body state tensor
     _rb_states = gym.acquire_rigid_body_state_tensor(sim)
@@ -568,31 +568,31 @@ for iter_run in range(num_of_runs):
 
     # ------------------------------- initializing buffer tensor ------------------------------------
 
-    buffer_position = torch.empty((0,num_envs,tot_coordinates), dtype=torch.float32).to(device=args.graphics_device_id) 
+    buffer_position = torch.empty((0,num_envs,tot_coordinates), dtype=torch.float32).to(device=args.graphics_device_id)
     buffer_target  = torch.empty((0,num_envs,3), dtype=torch.float32)
 
-    # No dynamical inclusion 
+    # No dynamical inclusion
 
     if dynamical_inclusion_flag:
-        buffer_control_action = torch.empty((0,num_envs,joints+dynamical_inclusion.shape[2]), dtype=torch.float32).to(device=args.graphics_device_id)  
-    
+        buffer_control_action = torch.empty((0,num_envs,joints+dynamical_inclusion.shape[2]), dtype=torch.float32).to(device=args.graphics_device_id)
+
     if control_imposed_file or osc_task:
         print("Buffer intilized for xy_task or control_imposed_by_file \n ")
-        buffer_control_action = torch.zeros((num_envs,joints,1), dtype=torch.float32).to(device=args.graphics_device_id) 
+        buffer_control_action = torch.zeros((num_envs,joints,1), dtype=torch.float32).to(device=args.graphics_device_id)
 
     else:
         print("Buffer intilized for control imposed directly in Nm\n ")
-        buffer_control_action = torch.zeros((1,num_envs,joints), dtype=torch.float32).to(device=args.graphics_device_id) 
-    
+        buffer_control_action = torch.zeros((1,num_envs,joints), dtype=torch.float32).to(device=args.graphics_device_id)
+
     # ----------------------------- Set control action as torque tensor -----------------------------
 
     if control_imposed and not control_imposed_file:
         if type_of_input == 'multi_sinusoidal':
-            # Multi-sinusoidal 
+            # Multi-sinusoidal
             my_control_action = control_action_function(num_envs,max_iteration+1,joints,frequency) # +1 for bugs
         elif type_of_input == 'chirp':
-            # chirp signal 
-            my_control_action = control_action_chirp(num_envs,max_iteration+1,joints,frequency).to(device=args.graphics_device_id) 
+            # chirp signal
+            my_control_action = control_action_chirp(num_envs,max_iteration+1,joints,frequency).to(device=args.graphics_device_id)
         else:
             print("Error! No valid input type. Choosing 'multi_sinusoidal' by default.\n")
             my_control_action = control_action_function(num_envs,max_iteration+1,joints,frequency) # +1 for bugs
@@ -609,14 +609,14 @@ for iter_run in range(num_of_runs):
             control_action_extracted = control_action_extracted.movedim(2,1)
             return control_action_extracted
 
-        my_control_action = loading() 
-        
+        my_control_action = loading()
+
     # -----------------------------------------------------------
 
-    # These are the list of each self-colliding environment   
-    black_list = []  
+    # These are the list of each self-colliding environment
+    black_list = []
     # This is the list of each environment which quaternion has an abnormal change
-    out_of_range_quaternion = [] 
+    out_of_range_quaternion = []
     saturated_ll_idxs = []
     saturated_ul_idxs = []
 
@@ -626,7 +626,7 @@ for iter_run in range(num_of_runs):
     if not headless_mode:
         condition_window = gym.query_viewer_has_closed(viewer)
     else:
-        condition_window = 0 
+        condition_window = 0
 
     _dof_states = gym.acquire_dof_state_tensor(sim)
     itr = 0 # control variable for inner loop
@@ -642,6 +642,23 @@ for iter_run in range(num_of_runs):
     q0_prev = None
 
     time_max_iteration = max_iteration * sim_params.dt
+
+    # coloring single envs
+    mesh = gymapi.MESH_VISUAL_AND_COLLISION  # MESH_VISUAL works fine
+    color = gymapi.Vec3(0, .9, .0)
+    env_handle = gym.get_env(sim, 0)
+    for k in range(body_links):
+        gym.set_rigid_body_color(env_handle, franka_handle, k, mesh, color)
+
+    color = gymapi.Vec3(0, .0, .9)
+    env_handle = gym.get_env(sim, 1)
+    for k in range(body_links):
+        gym.set_rigid_body_color(env_handle, franka_handle, k, mesh, color)
+
+    color = gymapi.Vec3(0.3, .0, .9)
+    env_handle = gym.get_env(sim, 2)
+    for k in range(body_links):
+        gym.set_rigid_body_color(env_handle, franka_handle, k, mesh, color)
 
     ## START LOOP 🔄🔄
     while not condition_window  and itr <= max_iteration-1:
@@ -665,13 +682,18 @@ for iter_run in range(num_of_runs):
         """E: CIRCLE OR SPIRAL"""
         if  osc_task == True:
             if itr ==1:
-                radius = torch.rand((1,num_envs)).uniform_(0.01,0.12).to(device=args.graphics_device_id)
+                radius = torch.rand((1,num_envs)).uniform_(0.12,0.12).to(device=args.graphics_device_id)
                 period = torch.rand(1).uniform_(20,100).to(device=args.graphics_device_id) # alza per rallentare
                 z_speed = torch.rand(1).uniform_(0.1,0.4).to(device=args.graphics_device_id) # abbassare per rallentare
                 sign = torch.sign(torch.rand(1).uniform_(-1,1)).to(device=args.graphics_device_id)
                 # offset =  torch.sign(torch.rand(1).uniform_(-0.3,0.3)).to(device=args.graphics_device_id)
                 vel_des = torch.zeros((num_envs, 6), device=args.graphics_device_id)
+
                 time_period = period * sim_params.dt
+
+            # TODO
+            #  Controllo in funzione del tempo (dt) e calcolare derivate in base a
+            #  quello in modo da dare velocita giuste
             #This was used for testC!
             if  type_of_task == 'VS': # Vertical spyral
                 pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / period) * radius
@@ -687,18 +709,11 @@ for iter_run in range(num_of_runs):
                 pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / 80) * radius
                 pos_des[:, 1] = init_pos[:, 1] + math.cos(itr / 80) * radius
                 pos_des[:, 2] = init_pos[:, 2] + - 0.1 + 0.2 * itr/max_iteration
-
-                vel_des[:, 0] = radius * math.cos(itr) / 80
-                vel_des[:, 1] = radius * -math.sin(itr) / 80
-                vel_des[:, 2] = - 0.1 + 0.2 / max_iteration
             elif type_of_task == 'FC': # Fixed circle
                 # radius = 0.1
                 pos_des[:, 0] = init_pos[:, 0]
                 pos_des[:, 1] = init_pos[:, 1] + math.sin(itr / 50) * radius #EDITED
                 pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 50) * radius #EDITED
-
-                vel_des[:, 1] = radius * math.cos(itr) / 50
-                vel_des[:, 2] = radius * -math.sin(itr) / 50
             elif type_of_task == 'FIX':
                 pos_des[:, 0] = init_pos[:, 0]
                 pos_des[:, 1] = init_pos[:, 1]
@@ -731,26 +746,31 @@ for iter_run in range(num_of_runs):
             pos_err = kp * (pos_des - pos_cur)
             dpose = torch.cat([pos_err, orn_err], -1).unsqueeze(-1)
 
-            control_formula = "classic"
-            if control_formula == "damped":
-                delta_u = damped_least_squared_ik(dpose, j_eef, num_envs) * sim_params.dt
-                u = dof_states[:, 0].view(num_envs, 9)
-                u += delta_u
-                u[:, 7:] = franka_mids[7].item() # setting the positions of the finger joints at the middle point to not collide
-                u = u.unsqueeze(-1).contiguous() # so it can be wrapped into a gymtorch tensor
-            elif control_formula == "redundant":
-                delta_u, q0 = redundant_manipulator_ik2(dof_pos_prev, dof_pos, j_eef, vel_des.unsqueeze(-1), dpose, num_envs, q0_prev)
+            # control_formula = "damped"
+            # if control_formula == "damped":
+            delta_u = damped_least_squared_ik(dpose, j_eef, num_envs) * sim_params.dt
+            u = dof_states[:, 0].view(num_envs, 9)
+            u += delta_u
+            u[:, 7:] = franka_mids[7].item() # setting the positions of the finger joints at the middle point to not collide
+            damped_u = u.unsqueeze(-1).contiguous() # so it can be wrapped into a gymtorch tensor
+            # elif control_formula == "redundant":
+            delta_u, q0 = redundant_manipulator_ik2(dof_pos_prev, dof_pos, j_eef, vel_des.unsqueeze(-1), dpose, num_envs, q0_prev)
 
-                delta_u = delta_u * sim_params.dt
-                u = dof_states[:, 0].view(num_envs, 9) + delta_u.squeeze(-1)
-                u[:, 7:] = franka_mids[7].item()
-                u = u.unsqueeze(-1).contiguous() # so it can be wrapped into a gymtorch tensor
-            elif control_formula == "classic": # using classic ik
-                delta_u = classic_ik(dpose, j_eef) * sim_params.dt
-                u = dof_states[:, 0].view(num_envs, 9) + delta_u.squeeze(-1)
+            delta_u = delta_u * sim_params.dt
+            u = dof_states[:, 0].view(num_envs, 9) + delta_u.squeeze(-1)
+            u[:, 7:] = franka_mids[7].item()
+            redundant_u = u.unsqueeze(-1).contiguous() # so it can be wrapped into a gymtorch tensor
+            # elif control_formula == "classic": # using classic ik
+            delta_u = classic_ik(dpose, j_eef) * sim_params.dt
+            u = dof_states[:, 0].view(num_envs, 9) + delta_u.squeeze(-1)
 
-                u[:, 7:] = franka_mids[7].item()
-                u = u.unsqueeze(-1).contiguous()  # so it can be wrapped into a gymtorch tensor
+            u[:, 7:] = franka_mids[7].item()
+            ik_u = u.unsqueeze(-1).contiguous()  # so it can be wrapped into a gymtorch tensor
+
+            u = damped_u # verde
+            u[1, :] = redundant_u[1, :] # blu
+            u[2, :] = ik_u[2, :] # viola
+
 
     # ------------------------------------- APPLICATION OF U -------------------------------------------------
         """E:
@@ -797,7 +817,8 @@ for iter_run in range(num_of_runs):
                 mesh = gymapi.MESH_VISUAL_AND_COLLISION # MESH_VISUAL works fine
                 color = gymapi.Vec3(.9,.25,.15)
                 env_handle = gym.get_env(sim,env_idx_collision)
-                for k in range(body_links):
+                # for k in range(body_links):
+                for k in range(body_links-8):
                     gym.set_rigid_body_color(env_handle,franka_handle, k , mesh ,color)
 
         # -------------------------------------- Step the physics --------------------------------------------------
@@ -933,17 +954,17 @@ for iter_run in range(num_of_runs):
             print("---- Number of simulations with abnormal change in quaternions: ",len(out_of_range_quaternion),"/", num_envs,"----\n" )
             # print(out_of_range_quaternion)
 
-            print("---- Number of the colliding simulations: ",len(black_list),"/", num_envs,"----\n" ) 
+            print("---- Number of the colliding simulations: ",len(black_list),"/", num_envs,"----\n" )
             # print(black_list)
 
             # Maybe a colliding env and abnormal change env coincide! Use always set
-            black_list = black_list + out_of_range_quaternion + saturation_idxs 
+            black_list = black_list + out_of_range_quaternion + saturation_idxs
             black_list = list(set(black_list))
             failed_percentage = len(black_list)/num_envs*100
             print("\n---- Number of bad simulations: ",len(black_list),"/", num_envs,"----\n")
             print("Percentage of total discarded simulations:", round(failed_percentage,2), "%")
 
-            #---- excluding all the invalid environment from the simulation ------ 
+            #---- excluding all the invalid environment from the simulation ------
             non_valid_envs = len(black_list)
             num_valid_envs = num_envs - non_valid_envs
 
@@ -961,27 +982,27 @@ for iter_run in range(num_of_runs):
                                         buffer_control_action [row_exclude+1:,:,:]),0)
                     buffer_target = torch.cat((buffer_position [:,:row_exclude,:],
                                         buffer_position [:,row_exclude+1:,:]),1)
-                
+
                 buffer_position = torch.cat((buffer_position [:,:row_exclude,:],
                     buffer_position [:,row_exclude+1:,:]),1)
 
             plotter.plot_with_slider()
 
-    
+
     # --------------------------------- SAVING THE BUFFERS ----------------------------------------------------
-    
+
     # This flag overcome the case in which all the simulation have collided
     # Avoiding strange errors [trying to save tensors with zero dimension]
-    if  osc_task or (control_imposed_file):       
+    if  osc_task or (control_imposed_file):
         buffer_control_action = buffer_control_action.movedim(1,2)
         buffer_control_action = buffer_control_action.movedim(0,1)
 
-    if buffer_control_action.shape[1] == 0: 
+    if buffer_control_action.shape[1] == 0:
         error_all_collided = True
     else:
         error_all_collided = False
 
-    if save_tensors and not(error_all_collided) and not(control_imposed_file): 
+    if save_tensors and not(error_all_collided) and not(control_imposed_file):
 
         if disable_gravity_flag:
             addition_gravity = '_no_gravity'
@@ -991,7 +1012,7 @@ for iter_run in range(num_of_runs):
         print("\n\nSaving tensor to file ... ")
 
         tensors_from_isaacGym = {
-            'control_action': buffer_control_action.to('cpu'), 
+            'control_action': buffer_control_action.to('cpu'),
             'position': buffer_position.to('cpu'),
             'masses': dynamical_inclusion.to('cpu')
              }
@@ -1000,7 +1021,7 @@ for iter_run in range(num_of_runs):
             type_of_input_save = 'MS'
         elif type_of_input == 'chirp':
             type_of_input_save = 'CH'
-        else: 
+        else:
             type_of_input_save = 'COMB'
 
         # Check if the file already exists in the chosen subfolder (train or dataset):
@@ -1022,22 +1043,22 @@ for iter_run in range(num_of_runs):
                        '_' + type_of_input_save +
                        '_rand_' + str(int(random_initial_positions)) + str(int(random_stiffness_dofs)) + str(int(random_masses)) + str(int(random_coms)) + addition_gravity +
                        '_bounds_mass_' + str(lower_bound_mass)+'_'+str(higher_bound_mass))
-        
+
         if osc_task:
-            
+
             tensors_from_isaacGym = {'control_action': buffer_control_action,
-                                      'position': buffer_position.to('cpu'), 
+                                      'position': buffer_position.to('cpu'),
                                       'target': buffer_target.to('cpu'),
                                       'masses': dynamical_inclusion.to('cpu')}
-            
-            name_tensor = (str(generated_seed) +'_envs_' + str(num_valid_envs) + '_steps_' + str(max_iteration)+ 
-                            '_osc_' + type_of_task +'_'+ str(int(random_initial_positions))+ str(int(random_stiffness_dofs)) + 
+
+            name_tensor = (str(generated_seed) +'_envs_' + str(num_valid_envs) + '_steps_' + str(max_iteration)+
+                            '_osc_' + type_of_task +'_'+ str(int(random_initial_positions))+ str(int(random_stiffness_dofs)) +
                             str(int(random_masses)) + str(int(random_coms))+ addition_gravity)
-                        
+
             if random_masses == True:
                 name_tensor = name_tensor + '_bounds_mass_'+str(lower_bound_mass)+'_'+str(higher_bound_mass)
 
-        print("\nThis is the ideal name of the current simulation:\n\n",name_tensor) 
+        print("\nThis is the ideal name of the current simulation:\n\n",name_tensor)
 
         # check the index of simulation
         if any(name_tensor in s for s in list_of_tensors):
@@ -1045,11 +1066,11 @@ for iter_run in range(num_of_runs):
 
         # create the file if it is not created yet (opening in append mode)
         f = open("training_dataset_list.txt", "a")
-        f.close()    
+        f.close()
 
         with open("training_dataset_list.txt") as text_file:
             lines = [line.rstrip() for line in text_file]
-        
+
         no_copies = True #E: set to True to save tensors, otherwise False
 
         for line in lines:
@@ -1059,12 +1080,12 @@ for iter_run in range(num_of_runs):
                 # check if there is an ononimy (already created)
                 if (name_tensor + '.pt') == line:
                     no_copies = False
-                    
+
 
         if no_copies:
             f = open("training_dataset_list.txt", "a")
             f.write(f'{name_tensor}.pt\n')
-            f.close()        
+            f.close()
             output = torch.save(tensors_from_isaacGym,'./out_tensors/'+type_of_dataset+'/'+ name_tensor+'.pt')
             print("\nSaved Done.\n ")
         else:
@@ -1086,21 +1107,21 @@ for iter_run in range(num_of_runs):
 
     # # results: matrix of steps x num_envs
     # =================================== PLOT TRAJECTORIES ==================================================
-    
+
     # i = 0 ,1, 2   # x y z [m]
     # i = 3 - 6   # quaternion orientation
 
     if plot_diagrams and not error_all_collided:
-        
+
         print("\n Plotting ...")
         #If there's no dynamical inclusion in input, plot only_torques automatically.
         if dynamical_inclusion_flag == False:
-            plot_only_torques = True 
+            plot_only_torques = True
 
-        fig, axs = plt.subplots(int(tot_coordinates/2),2,figsize=(20,20)) 
+        fig, axs = plt.subplots(int(tot_coordinates/2),2,figsize=(20,20))
         fig.suptitle('Output: full pose and joint positions')
         label_coordinates = ['x','y','z','$X$','$Y$','$Z$','$W$',
-                             '$q_0$','$q_1$','$q_2$','$q_3$','$q_4$','$q_5$','$q_6$'] 
+                             '$q_0$','$q_1$','$q_2$','$q_3$','$q_4$','$q_5$','$q_6$']
 
         k = 0
         for j in range(2):
@@ -1110,7 +1131,7 @@ for iter_run in range(num_of_runs):
                     axs[i,j].set(ylabel='m', title=label_coordinates[k])
                     axs[i,j].grid()
                     if buffer_target != []:
-                        axs[i,j].plot(buffer_target[:,:,k].to("cpu").numpy(),'r-',label='target') 
+                        axs[i,j].plot(buffer_target[:,:,k].to("cpu").numpy(),'r-',label='target')
                         # axs[i,j].legend()
                 elif k>2 and k<=6:
                     axs[i,j].plot(buffer_position[:,:,k].to("cpu").numpy())
@@ -1131,16 +1152,16 @@ for iter_run in range(num_of_runs):
 
         #     buffer_control_action = buffer_control_action.movedim(0,1)  #added
         #     buffer_control_action = buffer_control_action.movedim(1,2)  #added
-            
+
         #     fig3, axs3 = plt.subplots(joints, figsize=(20,20))
         #     fig3.suptitle('Control action among Dofs')
         #     for i in range(joints):
-        #         temporary=buffer_control_action[i,1:,:].to("cpu").numpy()   
+        #         temporary=buffer_control_action[i,1:,:].to("cpu").numpy()
         #         if i <=joints-1:
         #             axs3[i].set(ylabel='torque', title='joint'+str(i)+'')
         #             axs3[i].plot(temporary)
         #         axs3[i].grid()
-        #     axs3[i].set(xlabel='iteration steps')    
+        #     axs3[i].set(xlabel='iteration steps')
         # else:
             # if plot_only_torques:
         fig3, axs3 = plt.subplots(joints, figsize=(20,20))
@@ -1148,7 +1169,7 @@ for iter_run in range(num_of_runs):
 
         fig3.suptitle('Control action among Dofs')
         for i in range(joints):
-            temporary=buffer_control_action[1:,:,i].to("cpu").numpy()   
+            temporary=buffer_control_action[1:,:,i].to("cpu").numpy()
             if i <=joints-1:
                 axs3[i].set(ylabel='torque', title='joint'+str(i)+'')
                 axs3[i].plot(temporary)
@@ -1157,11 +1178,11 @@ for iter_run in range(num_of_runs):
 
         if plot_only_torques == False:
 
-            fig2, axs2 = plt.subplots(dynamical_inclusion.shape[2], figsize=(20,20))  
-            fig2.suptitle('Masses of each body') 
+            fig2, axs2 = plt.subplots(dynamical_inclusion.shape[2], figsize=(20,20))
+            fig2.suptitle('Masses of each body')
 
-            for i in range(dynamical_inclusion.shape[2]):  
-                temporary=buffer_control_action[:,:,joints+i].to("cpu").numpy()    
+            for i in range(dynamical_inclusion.shape[2]):
+                temporary=buffer_control_action[:,:,joints+i].to("cpu").numpy()
                 axs2[i].grid()
                 axs2[i].set(xlabel='iteration steps')
                 axs2[i].set(ylabel='mass', title='body'+str(i)+'')
@@ -1179,27 +1200,27 @@ for iter_run in range(num_of_runs):
         fig.tight_layout(pad=3)
         fig.subplots_adjust(top = .96)
         fig3.subplots_adjust(left=0.07,
-                    bottom=0.06, 
-                    right=0.97, 
-                    top=0.92, 
-                    wspace=0.2, 
+                    bottom=0.06,
+                    right=0.97,
+                    top=0.92,
+                    wspace=0.2,
                     hspace=0.54)
-        
+
         fig.tight_layout()
         plt.show()
-        
-        
-    # clearing associated memory --> Apparently it seems to not effecting 
+
+
+    # clearing associated memory --> Apparently it seems to not effecting
     # the required Used Dedicated Memory
 
     # # if control action is imposed, clear variable u_custom
 
-    # if control_imposed:  
+    # if control_imposed:
     # del u_custom
-    # del u 
+    # del u
     # del buffer_position
     # del buffer_control_action
-    # del full_pose 
+    # del full_pose
     # del contact_forces
     # del _contact_forces
     # del out_of_range
@@ -1214,26 +1235,26 @@ print("Simulation finished.")
     # This is the format in which the tensor is saved:
 
     #  NNN         -->  SEED
-    # _envs_     --> number of envs 
-    # _num_runs_ --> number of runs 
-    # 
-    # (example, if envs is 128 and num_runs is 10 --> potentially 1280 envs 
+    # _envs_     --> number of envs
+    # _num_runs_ --> number of runs
+    #
+    # (example, if envs is 128 and num_runs is 10 --> potentially 1280 envs
     # [without considering % of collided envs])
 
     #steps      -->  number of time steps
-    # frequency -->  is the base frequency of the control action 
+    # frequency -->  is the base frequency of the control action
     #                 (which is maipulated internally by the function)
 
     # _input_   -->  type of input: MS,CH,COMB | Multi-sinusoidal, chirp, combination
 
     # _rand_  -->  boolean variables in 0/1 | The case below, produce _random_1010
 
-    # # random_initial_positions = True         
+    # # random_initial_positions = True
     # # random_stiffness_dofs = False
     # # random_masses = True
     # # random_coms = False
 
-    # _bounds_mass_ --> lower_bound and higher_bound 
+    # _bounds_mass_ --> lower_bound and higher_bound
 
 
 
