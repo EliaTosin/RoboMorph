@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import os
 from pathlib import Path
 
-from FrankaController import JointPositionController
+from Franka_JointPositionController import JointPositionController
 from PlotterHelper import Plotter
 
 torch.cuda.empty_cache()
@@ -1009,9 +1009,12 @@ for iter_run in range(num_of_runs):
         """E:
         12 - seed (for reproducibility)
         32 - num_envs
-        1000 - max_iteration? (steps)
+        1000 - max_iteration (steps)
         0_1 - frequency? (0.1)
-        0010 - MS_rand ??task? --> yes
+        0010 -  - `random_initial_positions` = False (0)
+                - `random_stiffness_dofs` = False (0)
+                - `random_masses` = True (1)
+                - `random_coms` = False (0)
         15_15 - higher/lower bound mass (percentage)
         """
         """ 12_envs_32_steps_1000_f_0_1_MS_rand_0010_bounds_mass_15_15.pt """
