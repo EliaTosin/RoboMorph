@@ -487,7 +487,7 @@ for iter_run in range(num_of_runs):
     """
     # Randomizing OSC control parameters
     if not random_kp_kv:
-        kp = 10
+        kp = 200
         kv = 2 * math.sqrt(kp)
     else:
         kp=torch.FloatTensor(num_envs, 1).uniform_(1, 5).to(device=args.graphics_device_id) 
@@ -572,11 +572,22 @@ for iter_run in range(num_of_runs):
 
     _dof_states = gym.acquire_dof_state_tensor(sim)
     itr = 0 # control variable for inner loop
+    kp=600
+    kd=150
+    impedance_controller = CartesianImpedanceController(
+        stiffness=kp, damping=kv, j_eef=j_eef, lower=-franka_effort_limits, upper=franka_effort_limits, device=args.graphics_device_id)
+
+    # import time
+    # last_time = time.time()
 
 
     ## START LOOP 🔄🔄
     while not condition_window  and itr <= max_iteration-1:
     # while not gym.query_viewer_has_closed(viewer):  #ORIGINAL
+
+        # now = time.time()
+        # delta_time = now - last_time
+        # last_time = now
 
         itr += 1
         # Update jacobian and mass matrix and contact collection
@@ -637,14 +648,20 @@ for iter_run in range(num_of_runs):
                 tutto assieme questo da le coppie ai giunti per arrivare a quella posizione
             """
 
-            # Solve for control (Operational Space Control)
-            m_inv = torch.inverse(mm)
-            m_eef = torch.inverse(j_eef @ m_inv @ torch.transpose(j_eef, 1, 2))
+            # # Solve for control (Operational Space Control)
+            # m_inv = torch.inverse(mm)
+            # m_eef = torch.inverse(j_eef @ m_inv @ torch.transpose(j_eef, 1, 2))
+            # orn_cur /= torch.norm(orn_cur, dim=-1).unsqueeze(-1)
+            # orn_err = orientation_error(orn_des, orn_cur)
+            # pos_err = kp * (pos_des - pos_cur)
+            # dpose = torch.cat([pos_err, orn_err], -1)
+            # u = torch.transpose(j_eef, 1, 2) @ m_eef @ (kp * dpose).unsqueeze(-1) - kv * mm @ dof_vel
+
             orn_cur /= torch.norm(orn_cur, dim=-1).unsqueeze(-1)
-            orn_err = orientation_error(orn_des, orn_cur)
-            pos_err = kp * (pos_des - pos_cur)
-            dpose = torch.cat([pos_err, orn_err], -1)
-            u = torch.transpose(j_eef, 1, 2) @ m_eef @ (kp * dpose).unsqueeze(-1) - kv * mm @ dof_vel
+            impedance_controller.start(pos_cur, pos_des, orn_cur, orn_des, dof_vel)
+            u = impedance_controller.update()
+            u = impedance_controller.saturated_torque(u)
+            u = u.contiguous()
 
         # In these case, control is manually imposed (directly in Nm)
                 
@@ -904,6 +921,7 @@ for iter_run in range(num_of_runs):
 
             plotter.plot_with_slider()
 
+        # print(f"Loop duration: {delta_time:.6f} s (≈ {1.0 / delta_time:.2f} Hz)")
 
     # --------------------------------- SAVING THE BUFFERS ----------------------------------------------------
     
