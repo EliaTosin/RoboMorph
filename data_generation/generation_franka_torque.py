@@ -487,7 +487,7 @@ for iter_run in range(num_of_runs):
     """
     # Randomizing OSC control parameters
     if not random_kp_kv:
-        kp = 200
+        kp = 10
         kv = 2 * math.sqrt(kp)
     else:
         kp=torch.FloatTensor(num_envs, 1).uniform_(1, 5).to(device=args.graphics_device_id) 
@@ -634,28 +634,6 @@ for iter_run in range(num_of_runs):
 
             plotter.add_desired_pose(pos_des)
             plotter.add_actual_pose(pos_cur)
-            """
-            m_inv__cart = torch.inverse(mm) --> 32,9,9 #inversa della mass matrix (passa da giunti a cartesiano)
-            m_eef__joints = torch.inverse(j_eef @ m_inv @ torch.transpose(j_eef, 1, 2)) --> 32,6,6 #sposta mass matrix sull'eef = matrice 6x6 che descrive come si comporta endeff nel mondo 
-            orn_cur /= torch.norm(orn_cur, dim=-1).unsqueeze(-1) --> 32,4 #normalizza quaternione orientamento (evita errori numerici)
-            orn_err = orientation_error(orn_des, orn_cur) --> 32,3 #tira fuori errori di orientamento rispetto al target sui 3 assi 
-            pos_err = kp * (pos_des - pos_cur) --> 32,3 # calcola errore di posizione e lo moltiplica a kp (quanto voglio che il robot si muova velocemente verso errore)
-            dpose = torch.cat([pos_err, orn_err], -1) --> 32,6 # concatena errore di pos e quello di orientamento (6 assi)
-            u = torch.transpose(j_eef, 1, 2) @ m_eef @ (kp * dpose).unsqueeze(-1) - kv * mm @ dof_vel 
-            --> 32,9,1 # converte j_eef da forza (cart) a coppia (joints), porto m_eef in joints [j_eef @ m_eef] <-> quanta coppia devo fare per stare in quella posa
-                moltiplica per pos desiderata (coppia per arrivare li al target). la seconda parte considerando velocità attuali dei giunti, si calcola inerzie dei giunti [mm @ dof_vel] e le moltiplica.
-                questo serve a compensare le velocità attuali e non andare oltre il target, ripetendo cosi l'errore all'infinito.
-                tutto assieme questo da le coppie ai giunti per arrivare a quella posizione
-            """
-
-            # # Solve for control (Operational Space Control)
-            # m_inv = torch.inverse(mm)
-            # m_eef = torch.inverse(j_eef @ m_inv @ torch.transpose(j_eef, 1, 2))
-            # orn_cur /= torch.norm(orn_cur, dim=-1).unsqueeze(-1)
-            # orn_err = orientation_error(orn_des, orn_cur)
-            # pos_err = kp * (pos_des - pos_cur)
-            # dpose = torch.cat([pos_err, orn_err], -1)
-            # u = torch.transpose(j_eef, 1, 2) @ m_eef @ (kp * dpose).unsqueeze(-1) - kv * mm @ dof_vel
 
             orn_cur /= torch.norm(orn_cur, dim=-1).unsqueeze(-1)
             impedance_controller.start(pos_cur, pos_des, orn_cur, orn_des, dof_vel)
