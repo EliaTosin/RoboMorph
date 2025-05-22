@@ -84,4 +84,16 @@ class CartesianImpedanceController:
         """
             limita il torque da applicare sui giunti tagliandolo entro i limiti
         """
-        return torch.clamp(actual_torque.squeeze(-1), self.torque_limit_lower, self.torque_limit_upper).unsqueeze(-1)
+        actual_torque = actual_torque.squeeze(-1)
+        mask_lower = actual_torque < self.torque_limit_lower
+        mask_upper = actual_torque > self.torque_limit_upper
+
+        env_idxs, joint_idxs = torch.where(mask_lower)
+        for env, joint in zip(env_idxs, joint_idxs):
+            print(f"Env {env}, Joint {joint} ha superato la soglia minima di {self.torque_limit_lower[joint]}: {actual_torque[env, joint]}")
+
+        env_idxs, joint_idxs = torch.where(mask_upper)
+        for env, joint in zip(env_idxs, joint_idxs):
+            print(f"Env {env}, Joint {joint} ha superato la soglia massima di {self.torque_limit_upper[joint]}: {actual_torque[env, joint]}")
+
+        return torch.clamp(actual_torque, self.torque_limit_lower, self.torque_limit_upper).unsqueeze(-1)

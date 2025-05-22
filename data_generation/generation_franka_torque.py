@@ -267,7 +267,7 @@ for iter_run in range(num_of_runs):
     # Load franka asset
     asset_root = "./" 
     # Specify the folder of the Franka urdf file
-    franka_asset_file = "franka_description/robots/franka_panda.urdf"
+    franka_asset_file = "franka_description/robots/franka_panda_est.urdf"
 
     asset_options = gymapi.AssetOptions()
     asset_options.fix_base_link = True
@@ -572,8 +572,8 @@ for iter_run in range(num_of_runs):
 
     _dof_states = gym.acquire_dof_state_tensor(sim)
     itr = 0 # control variable for inner loop
-    kp=600
-    kd=150
+    kp=1000
+    kd=600
     impedance_controller = CartesianImpedanceController(
         stiffness=kp, damping=kv, j_eef=j_eef, lower=-franka_effort_limits, upper=franka_effort_limits, device=args.graphics_device_id)
 
@@ -638,6 +638,7 @@ for iter_run in range(num_of_runs):
             orn_cur /= torch.norm(orn_cur, dim=-1).unsqueeze(-1)
             impedance_controller.start(pos_cur, pos_des, orn_cur, orn_des, dof_vel)
             u = impedance_controller.update()
+            plotter.add_joint_target(u[:, :7, :].squeeze(dim=2))
             u = impedance_controller.saturated_torque(u)
             u = u.contiguous()
 
@@ -689,14 +690,16 @@ for iter_run in range(num_of_runs):
             g_torque = (torch.transpose(j_link, 2, 3) @ g_force).squeeze(-1)
             g_torque = torch.sum(g_torque, dim=1, keepdim=False)
             g_torque = g_torque.unsqueeze(-1)
+            plotter.add_joint_pose((-dof_torques-g_torque).view(1, num_envs, franka_num_dofs).squeeze(dim=0)[:, :7]) # removing compensation from sensor read
             u += g_torque       # u = u + g_torque --> more efficent
+        else:
+            plotter.add_joint_pose(-dof_torques.view(1, num_envs, franka_num_dofs).squeeze(dim=0)[:, :7])
 
     # ------------------------------------- APPLICATION OF U -------------------------------------------------
         """E:
         U -> effort to apply on the joints (computed based on the task)
         """
         # Set control action as torque tensor, or position tensor
-        plotter.add_joint_pose(-dof_torques.view(1, num_envs, franka_num_dofs).squeeze(dim=0)[:, :7])
         gym.set_dof_actuation_force_tensor(sim, gymtorch.unwrap_tensor(u))
 
     # ------------------------------------ CONTACT COLLECTION -------------------------------------------------
@@ -788,7 +791,6 @@ for iter_run in range(num_of_runs):
         pos_cur = pos_cur.to("cpu").view(1,num_envs,3)  # x y z
         orn_cur = orn_cur.to("cpu").view(1,num_envs,4)  # orientation angles
 
-        plotter.add_joint_target(u[:, :7, :].squeeze(dim=2))
 
         # -------------------------- INCLUDING dof_pos for 7 - dimension state space -------------------------------
 
