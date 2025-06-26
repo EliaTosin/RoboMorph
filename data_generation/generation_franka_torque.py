@@ -621,7 +621,8 @@ for iter_run in range(num_of_runs):
                 radius = 0.1           # Fixed spyral
                 pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / 80) * radius
                 pos_des[:, 1] = init_pos[:, 1] + math.cos(itr / 80) * radius
-                pos_des[:, 2] = init_pos[:, 2] + - 0.1 + 0.2 * itr/max_iteration
+                # pos_des[:, 2] = init_pos[:, 2] + - 0.1 + (WHY PLUS? Should be * looking at VS) 0.2 * itr/max_iteration
+                pos_des[:, 2] = init_pos[:, 2] - 0.1 * itr/max_iteration
             elif type_of_task == 'FC': # Fixed circle
                 # radius = 0.1
                 pos_des[:, 0] = init_pos[:, 0]
