@@ -19,18 +19,33 @@ def orientation_error(desired, current):
     return q_r[:, 0:3] * torch.sign(q_r[:, 3]).unsqueeze(-1)
 
 class PIDController:
+    """
+        This class implements a PID-based Cartesian impedance controller
+        for robotic end-effectors, generating joint torques based on
+        position and orientation errors, stiffness/damping gains, and
+        torque saturation limits.
+    """
 
     def __init__(self, stiffness, damping, ki, j_eef, lower, upper, dt, device):
         """
-            init
-                stiffness,
-                damping,
-                joint names,
-                posiz,
-                orientamento (quaternione)
-                posiz_target,
-                orientamento_target
+            Constructor for PIDController.
 
+            Purpose:
+            - Initialize control gains (stiffness, damping, integral gain).
+            - Store Jacobian matrix for end-effector control.
+            - Define torque limits to prevent unsafe values.
+            - Prepare tensors for position, orientation, and accumulated error tracking.
+            - Set control timestep (dt) and allocate tensors on the specified device.
+
+            Parameters:
+            - stiffness: Proportional gain for Cartesian control.
+            - damping: Derivative gain for Cartesian control.
+            - ki: Integral gain for error compensation.
+            - j_eef: End-effector Jacobian for all environments.
+            - lower: Lower torque limits per joint.
+            - upper: Upper torque limits per joint.
+            - dt: Control loop time step.
+            - device: Compute device (e.g., "cuda" or "cpu").
         """
         self.stiffness = stiffness
         self.damping = damping
@@ -50,11 +65,18 @@ class PIDController:
 
     def start(self, pos, des_pos, orn, orn_des, vel):
         """
-            init
-                 posiz
-                 orientamento
-                 posiz_target
-                 orientamento_target
+            Initialize the controller state with the current and desired poses.
+
+            Purpose:
+            - Set the current and desired positions and orientations.
+            - Initialize the joint velocity state for derivative control.
+
+            Parameters:
+            - pos: Current Cartesian position of the end-effector.
+            - des_pos: Desired Cartesian position of the end-effector.
+            - orn: Current orientation of the end-effector (e.g., Euler or quaternion).
+            - orn_des: Desired orientation of the end-effector.
+            - vel: Current joint velocity vector.
         """
         self.pos = pos
         self.pos_target = des_pos
@@ -64,14 +86,17 @@ class PIDController:
 
     def update(self):
         """
-            calcola errore posiz dell'eef
-            calcola errore orientamento dell'eef
+            Compute the control command (joint torques) based on PID logic in Cartesian space.
 
-            calcola jacob trasposta
+            Purpose:
+            - Calculate position and orientation errors.
+            - Formulate the error vector for Cartesian space (6 DoF).
+            - Update the integral error term.
+            - Compute control effort in task space using stiffness, damping, and integral gains.
+            - Map Cartesian control forces to joint torques using the Jacobian transpose.
 
-            calcola torque per la task tramite
-                trasposta_jeef * (stiffness - dpose - damping * (jeef * velocita_joints)
-
+            Returns:
+            - u: Tensor of joint torques for each environment.
         """
         pos_err = self.pos_target - self.pos
         orn_err = orientation_error(self.orient_target, self.orient)
@@ -87,7 +112,17 @@ class PIDController:
 
     def saturated_torque(self, actual_torque):
         """
-            limita il torque da applicare sui giunti tagliandolo entro i limiti
+            Apply torque saturation and log any violations of torque limits.
+
+            Purpose:
+            - Clamp computed torques to predefined safe ranges for each joint.
+            - Identify and report joints that exceeded lower or upper torque thresholds.
+
+            Parameters:
+            - actual_torque: Computed joint torque tensor before saturation.
+
+            Returns:
+            - Saturated torque tensor within the specified limits.
         """
         actual_torque = actual_torque.squeeze(-1)
         mask_lower = actual_torque < self.torque_limit_lower
@@ -95,10 +130,10 @@ class PIDController:
 
         env_idxs, joint_idxs = torch.where(mask_lower)
         for env, joint in zip(env_idxs, joint_idxs):
-            print(f"Env {env}, Joint {joint} ha superato la soglia minima di {self.torque_limit_lower[joint]}: {actual_torque[env, joint]}")
+            print(f"Env {env}, Joint {joint} has exceeded the minimum limit of {self.torque_limit_lower[joint]}: {actual_torque[env, joint]}")
 
         env_idxs, joint_idxs = torch.where(mask_upper)
         for env, joint in zip(env_idxs, joint_idxs):
-            print(f"Env {env}, Joint {joint} ha superato la soglia massima di {self.torque_limit_upper[joint]}: {actual_torque[env, joint]}")
+            print(f"Env {env}, Joint {joint} has exceeded the maximum limit of {self.torque_limit_upper[joint]}: {actual_torque[env, joint]}")
 
         return torch.clamp(actual_torque, self.torque_limit_lower, self.torque_limit_upper).unsqueeze(-1)

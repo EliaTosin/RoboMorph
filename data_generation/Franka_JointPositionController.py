@@ -1,34 +1,31 @@
-
-"""
-In ''generation_franka.py'' usa
-
-set_dof_actuation_force_tensor --> COMANDO IN FORZA
-
------------------------------------------------------
-
-Qui si fa controllo in posizione. Si può usare
-
-set_dof_position_target_tensor
-
-"""
-
 import torch
 from isaacgym import gymtorch
 
-
 class JointPositionController:
+    """
+        This class implements a simple joint position controller for simulations
+        using Isaac Gym. It allows initializing joint states, setting a target trajectory,
+        and updating positions over time with interpolation.
+    """
 
     def __init__(self, gym, sim, asset, num_envs, device, dt, max_time_s):
         """
-            salvare gym controller in un attributo locale
+            Constructor for the JointPositionController class.
 
-            salvare nomi giunti
+            Purpose:
+            - Validate the provided simulation interfaces (`gym`, `sim`, and `asset`).
+            - Retrieve joint names from the robot asset and check that the number matches expectations.
+            - Initialize tensors for DOF (Degrees of Freedom) states and position targets.
+            - Store timing parameters for controlling motion (time step and maximum time for movement).
 
-            inizializzare initial pose e time
-
-            inizializzare target (num_envs, num_joints)
-
-            salvare posizioni default
+            Parameters:
+            - gym: The main Isaac Gym interface.
+            - sim: Handle to the simulation instance.
+            - asset: The loaded robot asset (URDF or equivalent).
+            - num_envs: Number of environments being simulated.
+            - device: Compute device for tensors (e.g., "cuda:0" or "cpu").
+            - dt: Simulation time step in seconds.
+            - max_time_s: Maximum allowed time to reach the target position.
         """
         self.gym_interface = gym
         if self.gym_interface is None:
@@ -64,9 +61,19 @@ class JointPositionController:
 
     def start(self, target_pos):
         """
-            settaggio initial pose con pose attuali
+            Initialize the control process with a given target position.
 
-            settaggio time a 0
+            Purpose:
+            - Acquire the current DOF states (positions) from the simulator.
+            - Store the target positions for each DOF in all environments.
+            - Reset the elapsed time counter for the interpolation process.
+
+            Details:
+            - The DOF state tensor returned by Isaac Gym includes positions and velocities; this method extracts only positions for the interpolation.
+            - The target positions (`target_pos`) should be provided as a tensor with shape (num_envs, number_of_joints).
+
+            Parameters:
+            - target_pos: Tensor of desired joint positions for all environments.
         """
         # taking the first [:,:,0] because "acquire_dof_state_tensor" retrieves both positions and velocities
         self.dof_states = gymtorch.wrap_tensor(self.gym_interface.acquire_dof_state_tensor(self.sim)).view(self.num_envs, -1, 2)[:, :, 0]
@@ -77,13 +84,24 @@ class JointPositionController:
 
     def update(self):
         """
-            incrementa time
+            Update the joint positions toward the target over time.
 
-            per ogni giunto
-                se time > 10:
-                    set pos des
-                else:
-                    interpolazione tra actual e target
+            Purpose:
+            - Progressively move the joints from the initial position toward the target using linear interpolation over the specified maximum time.
+            - After reaching `max_time_s`, apply the target position directly.
+            - Simulate one step of the environment after setting new targets.
+
+            Logic:
+            - Compute alpha = elapsed_time / max_time_s to define interpolation ratio.
+            - Calculate intermediate positions as a weighted sum of initial and target positions.
+            - Send the computed positions to the simulator.
+            - Step the simulation forward by one iteration.
+
+            Behavior:
+            - Before `max_time_s`, motion is smooth and interpolated.
+            - After `max_time_s`, positions are fixed to the final target.
+
+            No parameters are needed; it operates on the stored state.
         """
         self.elapsed_time += self.dt
 

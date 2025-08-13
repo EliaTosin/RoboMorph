@@ -114,63 +114,6 @@ compensate = True
 
 name_of_test_file = '12_envs_32_steps_1000_f_0_1_MS_rand_0010_bounds_mass_15_15.pt'
 
-# ----------------------------------------- MANAGE BOOLEAN CHOICES ----------------------------------------
-
-# disable_gravity_flag = False              # if False, the gravity isn't manually compensated
-# headless_mode = False                    # if False, displays the simulation window
-
-# control_imposed = True         
-# control_imposed_file = False
-# osc_task = False
-
-# headless_mode= False 
-# control_imposed = False         
-# control_imposed_file = False
-# osc_task = True
-# type_of_task = 'FS'
-# random_initial_positions = True
-# random_masses = True
-# save_tensors = True 
-# num_envs = 32  
-# save_tensors = False
-
-# plot_diagrams=True
-
-# random_stiffness_dofs = False
-# frequency = .15
-# type_of_input = 'chirp'
-
-# control_imposed = True         
-# control_imposed_file = True
-# osc_task = False
-
-# random_initial_positions = True
-# plot_diagrams = True                    # If True, could take much more time
-# plot_only_torques = False               # if False it plots also the dynamical inclusion
-
-# random_masses = True
-# lower_bound = 30
-# higher_bound = 30
-
-# random_coms = False
-# random_kp_kv = False                    # OSC control parameters THIS IS NOT USED if control_imposed = True
-
-# type_of_input = 'multi_sinusoidal'      # 'combination','chirp','multi_sinusoidal'
-
-# tot_coordinates = 14                    # Stands for (x,y,z) + quaternions + 7 joints space
-# joints = 9                              # This represents the actual number of dofs
-# body_links = 11
-
-# # Important for simulation 
-# save_tensors = True 
-# dynamical_inclusion_flag = False        # This include/exclude masses from input tensor
-# type_of_dataset = 'train'               # This is the subfolder in which we want to save ['train' or 'test' ]
-# frequency = .1                           # master frequency
-# num_envs = 32                       # number of robots in each run
-# num_of_runs = 1                        # number of runs 
-# max_iteration = 1000                    # number of time_steps in simulation
-
-# ---------------------------------------------------------------------------------------------------------
 
 if control_imposed_file:
     max_iteration = max_iteration - 1 
@@ -265,12 +208,8 @@ for iter_run in range(num_of_runs):
 
     # Check if in the other folder's is present the same seed 
     copies = True
-    
-    # print(args.seed)
-    # if args.seed == 0:
+
     generated_seed = np.random.randint(0,9999)
-    # else:
-    #     generated_seed = args.seed
     
     print("\nGenerated seed: "+str(generated_seed))
 
@@ -462,7 +401,7 @@ for iter_run in range(num_of_runs):
             link_mass_tensor = torch.zeros(body_links,dtype=torch.float32,device=args.graphics_device_id)
 
             for l in range(0,len(rigid_body_properties)):
-                """E: generate random masses and setting on the simulated links"""
+                # generate random masses and setting on the simulated links
                 rigid_body_properties[l].mass = rigid_body_properties[l].mass * torch.rand(1).uniform_(lower_bound,higher_bound).numpy()
                 link_mass_tensor[l]=rigid_body_properties[l].mass
 
@@ -521,13 +460,6 @@ for iter_run in range(num_of_runs):
     body_names = gym.get_actor_rigid_body_names(env, franka_handle)
 
     # Prepare jacobian tensor
-    """E:
-    conv da stato joints (9) a pos end_effector (6) --> forw kin, da joint coord a world coord
-    Shape:
-    10 -> num_bodies (filtra su corpo che ci interessa) 
-    6 -> velocità del body (3 lineari 3 angolari)
-    9 -> joints (7 normali e 2 dita)
-    """
     # For franka, tensor shape is (num_envs, 10, 6, 9)
     _jacobian = gym.acquire_jacobian_tensor(sim, "franka")
     jacobian = gymtorch.wrap_tensor(_jacobian)
@@ -537,17 +469,10 @@ for iter_run in range(num_of_runs):
     j_eef = jacobian[:, hand_index - 1, :]
 
     # Prepare mass matrix tensor
-    """E:
-    descrive la relazione tra le inerzie tra i vari joint (trasforma acc joints in forze joints) --> forza necessaria per cambiare il movimento (sia fermo che durante moto) ed 
-    è influenzata da come è posizionato il robot --> indicata come M(q)
-    """
     # For franka, tensor shape is (num_envs, 9, 9)
     _massmatrix = gym.acquire_mass_matrix_tensor(sim, "franka")
     mm = gymtorch.wrap_tensor(_massmatrix)
 
-    """E:
-    due params OSC paper 3.3.2
-    """
     # Randomizing OSC control parameters
     if not random_kp_kv:
         kp = 10
@@ -630,7 +555,6 @@ for iter_run in range(num_of_runs):
 
     _dof_states = gym.acquire_dof_state_tensor(sim)
     itr = 0 # control variable for inner loop
-    # joint_pos_controller = JointPositionController(gym=gym, sim=sim, asset=franka_asset, num_envs=num_envs, device=args.graphics_device_id, dt=sim_params.dt, max_time_s = 5)
 
     desired_poses = torch.zeros_like(init_pos)
     actual_poses = torch.zeros_like(init_pos)
@@ -645,7 +569,6 @@ for iter_run in range(num_of_runs):
 
     ## START LOOP 🔄🔄
     while not condition_window  and itr <= max_iteration-1:
-    # while not gym.query_viewer_has_closed(viewer):  #ORIGINAL
 
         itr += 1
         time_itr = itr * sim_params.dt
@@ -662,17 +585,14 @@ for iter_run in range(num_of_runs):
         orn_cur = rb_states[hand_idxs, 3:7]
 
         # Set desired hand positions # ORIGINAL
-        """E: CIRCLE OR SPIRAL"""
         if  osc_task == True:
             if itr ==1:
                 radius = torch.rand((1,num_envs)).uniform_(0.01,0.12).to(device=args.graphics_device_id)
                 period = torch.rand(1).uniform_(20,100).to(device=args.graphics_device_id) # alza per rallentare
                 z_speed = torch.rand(1).uniform_(0.1,0.4).to(device=args.graphics_device_id) # abbassare per rallentare
                 sign = torch.sign(torch.rand(1).uniform_(-1,1)).to(device=args.graphics_device_id)
-                # offset =  torch.sign(torch.rand(1).uniform_(-0.3,0.3)).to(device=args.graphics_device_id)
                 vel_des = torch.zeros((num_envs, 6), device=args.graphics_device_id)
                 time_period = period * sim_params.dt
-            #This was used for testC!
             if  type_of_task == 'VS': # Vertical spyral
                 pos_des[:, 0] = init_pos[:, 0] + math.sin(itr / period) * radius
                 pos_des[:, 1] = init_pos[:, 1] + math.cos(itr / period) * radius
@@ -713,18 +633,10 @@ for iter_run in range(num_of_runs):
                 vel_des[:, 1] = -w0 * radius * math.sin(w0*time_itr + math.pi + alpha)
                 vel_des[:, 2] = w0 * radius * math.cos(w0*time_itr + math.pi + alpha)
 
-            # pos_des[:, 0] = init_pos[:, 0] - 0.05
-            # pos_des[:, 1] = init_pos[:, 1] + math.sin(itr / 50) * 0.15
-            # pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 50) * 0.15
-            # vel_des[:, 0] = 0
-            # vel_des[:, 1] = math.cos(itr / 50) * 0.15
-            # vel_des[:, 2] = math.sin(itr / 50) * 0.15
-
             plotter.add_desired_pose(pos_des)
             plotter.add_actual_pose(pos_cur)
 
-            ## ⚠️⚠️ QUI ORA INVECE DI OSC SI USA KIN INV PER TROVARE POS JOINT DA POS+OR
-            kp = 100 #TODO PARAM DA RANDOMIZZARE?
+            kp = 100
             kp_orn = 100
             orn_err = kp_orn * orientation_error(orn_des, orn_cur)
 
@@ -737,28 +649,22 @@ for iter_run in range(num_of_runs):
                 u = dof_states[:, 0].view(num_envs, 9)
                 u += delta_u
                 u[:, 7:] = franka_mids[7].item() # setting the positions of the finger joints at the middle point to not collide
-                u = u.unsqueeze(-1).contiguous() # so it can be wrapped into a gymtorch tensor
+                u = u.unsqueeze(-1).contiguous() 
             elif control_formula == "redundant":
                 delta_u, q0 = redundant_manipulator_ik2(dof_pos_prev, dof_pos, j_eef, vel_des.unsqueeze(-1), dpose, num_envs, q0_prev)
 
                 delta_u = delta_u * sim_params.dt
                 u = dof_states[:, 0].view(num_envs, 9) + delta_u.squeeze(-1)
                 u[:, 7:] = franka_mids[7].item()
-                u = u.unsqueeze(-1).contiguous() # so it can be wrapped into a gymtorch tensor
+                u = u.unsqueeze(-1).contiguous() 
             elif control_formula == "classic": # using classic ik
                 delta_u = classic_ik(dpose, j_eef) * sim_params.dt
                 u = dof_states[:, 0].view(num_envs, 9) + delta_u.squeeze(-1)
 
                 u[:, 7:] = franka_mids[7].item()
-                u = u.unsqueeze(-1).contiguous()  # so it can be wrapped into a gymtorch tensor
+                u = u.unsqueeze(-1).contiguous()  
 
     # ------------------------------------- APPLICATION OF U -------------------------------------------------
-        """E:
-        U -> effort to apply on the joints (computed based on the task)
-        """
-        ## ⚠️⚠️ QUI CHE ABBIAMO TROVATO POS JOINT LE DIAMO AL CONTROLLER CHE PORTERA IL ROBOT IN POSIZ
-        # joint_pos_controller = JointPositionController(gym=gym, sim=sim, asset=franka_asset, target_pos=joint_pos_des, num_envs=num_envs, device=args.graphics_device_id)
-        # joint_pos_controller.start()
 
         plotter.add_joint_pose(dof_pos.view(1, num_envs, franka_num_dofs).squeeze(dim=0)[:, :7])
         gym.set_dof_position_target_tensor(sim, gymtorch.unwrap_tensor(u))
@@ -805,18 +711,10 @@ for iter_run in range(num_of_runs):
         gym.simulate(sim)
         gym.fetch_results(sim, True)
 
-        # joint_pos_controller.start(u)
-        #
-        # while(joint_pos_controller.elapsed_time < joint_pos_controller.max_time_s):
-        #     joint_pos_controller.update()
-        #     gym.simulate(sim)
-        #     gym.fetch_results(sim, True)
-
         if not headless_mode:
             # Step rendering
             gym.step_graphics(sim)
             gym.draw_viewer(viewer, sim, False) # True - collision | False - visual
-            # gym.sync_frame_time(sim)
 
         # --------------------------------------- Stacking in the buffers -------------------------------------------------
 
@@ -879,9 +777,6 @@ for iter_run in range(num_of_runs):
 
             #This is the increment of the undesired changes in quaternion
             increment = abs(buffer_position[itr-1,:,4:7]- buffer_position[itr-2,:,4:7])
-
-            #This is the increment of the undesired changes in all dofs!
-            # increment = abs(buffer_position[itr-1,:,:7]- buffer_position[itr-2,:,:7])
 
             #These are the out of range simulations
             out_of_range = torch.nonzero(increment > .1) #  np.rad2deg(.15) = 9°
@@ -1006,18 +901,6 @@ for iter_run in range(num_of_runs):
         # Check if the file already exists in the chosen subfolder (train or dataset):
         list_of_tensors = os.listdir("./out_tensors/"+type_of_dataset)
 
-        """E:
-        12 - seed (for reproducibility)
-        32 - num_envs
-        1000 - max_iteration (steps)
-        0_1 - frequency? (0.1)
-        0010 -  - `random_initial_positions` = False (0)
-                - `random_stiffness_dofs` = False (0)
-                - `random_masses` = True (1)
-                - `random_coms` = False (0)
-        15_15 - higher/lower bound mass (percentage)
-        """
-        """ 12_envs_32_steps_1000_f_0_1_MS_rand_0010_bounds_mass_15_15.pt """
         name_tensor = (str(generated_seed) +
                        '_envs_' + str(num_valid_envs) +
                        '_steps_' + str(max_iteration) +
@@ -1130,22 +1013,6 @@ for iter_run in range(num_of_runs):
 
         #-----------------------------------------------------------------------------------
 
-        # if osc_task or control_imposed_file:
-
-        #     buffer_control_action = buffer_control_action.movedim(0,1)  #added
-        #     buffer_control_action = buffer_control_action.movedim(1,2)  #added
-            
-        #     fig3, axs3 = plt.subplots(joints, figsize=(20,20))
-        #     fig3.suptitle('Control action among Dofs')
-        #     for i in range(joints):
-        #         temporary=buffer_control_action[i,1:,:].to("cpu").numpy()   
-        #         if i <=joints-1:
-        #             axs3[i].set(ylabel='torque', title='joint'+str(i)+'')
-        #             axs3[i].plot(temporary)
-        #         axs3[i].grid()
-        #     axs3[i].set(xlabel='iteration steps')    
-        # else:
-            # if plot_only_torques:
         fig3, axs3 = plt.subplots(joints, figsize=(20,20))
         fig3.suptitle('Control action among Dofs',y=1.2)
 
@@ -1170,14 +1037,6 @@ for iter_run in range(num_of_runs):
                 axs2[i].set(ylabel='mass', title='body'+str(i)+'')
                 axs2[i].plot(temporary)
 
-        # label_coordinates = ['x','y','z']
-        # fig4, axs4 = plt.subplots(3)
-        # fig4.suptitle('Position Target')
-        # for i in range(3):
-        #     axs4[i].plot(buffer_target[:,:,i].to("cpu").numpy())
-        #     axs4[i].set(xlabel='iteration steps', ylabel='m', title=label_coordinates[i])
-        #     axs4[i].grid()
-
         fig3.tight_layout(pad=3)
         fig.tight_layout(pad=3)
         fig.subplots_adjust(top = .96)
@@ -1194,49 +1053,6 @@ for iter_run in range(num_of_runs):
         
     # clearing associated memory --> Apparently it seems to not effecting 
     # the required Used Dedicated Memory
-
-    # # if control action is imposed, clear variable u_custom
-
-    # if control_imposed:  
-    # del u_custom
-    # del u 
-    # del buffer_position
-    # del buffer_control_action
-    # del full_pose 
-    # del contact_forces
-    # del _contact_forces
-    # del out_of_range
-
     torch.cuda.empty_cache()
 
 print("Simulation finished.")
-
-
-# ============================== SAVING TENSORS TO FILE ===============================
-
-    # This is the format in which the tensor is saved:
-
-    #  NNN         -->  SEED
-    # _envs_     --> number of envs 
-    # _num_runs_ --> number of runs 
-    # 
-    # (example, if envs is 128 and num_runs is 10 --> potentially 1280 envs 
-    # [without considering % of collided envs])
-
-    #steps      -->  number of time steps
-    # frequency -->  is the base frequency of the control action 
-    #                 (which is maipulated internally by the function)
-
-    # _input_   -->  type of input: MS,CH,COMB | Multi-sinusoidal, chirp, combination
-
-    # _rand_  -->  boolean variables in 0/1 | The case below, produce _random_1010
-
-    # # random_initial_positions = True         
-    # # random_stiffness_dofs = False
-    # # random_masses = True
-    # # random_coms = False
-
-    # _bounds_mass_ --> lower_bound and higher_bound 
-
-
-

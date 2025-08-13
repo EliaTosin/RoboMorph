@@ -105,63 +105,6 @@ compensate = True
 
 name_of_test_file = '12_envs_32_steps_1000_f_0_1_MS_rand_0010_bounds_mass_15_15.pt'
 
-# ----------------------------------------- MANAGE BOOLEAN CHOICES ----------------------------------------
-
-# disable_gravity_flag = False              # if False, the gravity isn't manually compensated
-# headless_mode = False                    # if False, displays the simulation window
-
-# control_imposed = True         
-# control_imposed_file = False
-# osc_task = False
-
-# headless_mode= False 
-# control_imposed = False         
-# control_imposed_file = False
-# osc_task = True
-# type_of_task = 'FS'
-# random_initial_positions = True
-# random_masses = True
-# save_tensors = True 
-# num_envs = 32  
-# save_tensors = False
-
-# plot_diagrams=True
-
-# random_stiffness_dofs = False
-# frequency = .15
-# type_of_input = 'chirp'
-
-# control_imposed = True         
-# control_imposed_file = True
-# osc_task = False
-
-# random_initial_positions = True
-# plot_diagrams = True                    # If True, could take much more time
-# plot_only_torques = False               # if False it plots also the dynamical inclusion
-
-# random_masses = True
-# lower_bound = 30
-# higher_bound = 30
-
-# random_coms = False
-# random_kp_kv = False                    # OSC control parameters THIS IS NOT USED if control_imposed = True
-
-# type_of_input = 'multi_sinusoidal'      # 'combination','chirp','multi_sinusoidal'
-
-# tot_coordinates = 14                    # Stands for (x,y,z) + quaternions + 7 joints space
-# joints = 9                              # This represents the actual number of dofs
-# body_links = 11
-
-# # Important for simulation 
-# save_tensors = True 
-# dynamical_inclusion_flag = False        # This include/exclude masses from input tensor
-# type_of_dataset = 'train'               # This is the subfolder in which we want to save ['train' or 'test' ]
-# frequency = .1                           # master frequency
-# num_envs = 32                       # number of robots in each run
-# num_of_runs = 1                        # number of runs 
-# max_iteration = 1000                    # number of time_steps in simulation
-
-# ---------------------------------------------------------------------------------------------------------
 
 if control_imposed_file:
     max_iteration = max_iteration - 1 
@@ -377,11 +320,6 @@ for iter_run in range(num_of_runs):
 
         # set DOF control properties for grippers - indipendently from the choice to randomize joints!
         franka_dof_props["driveMode"][7:].fill(gymapi.DOF_MODE_POS)
-        # franka_dof_props["stiffness"][7:].fill(800.0)
-        # franka_dof_props["damping"][7:].fill(40.0)
-
-        # ADDED 12/01
-        # gym.set_actor_dof_properties(env, franka_handle, franka_dof_props)
 
         # Set random mass and centers of masses for each link 
         if not random_masses:
@@ -400,7 +338,7 @@ for iter_run in range(num_of_runs):
             link_mass_tensor = torch.zeros(body_links,dtype=torch.float32,device=args.graphics_device_id)
 
             for l in range(0,len(rigid_body_properties)):
-                """E: generate random masses and setting on the simulated links"""
+                # generate random masses and setting on the simulated links
                 rigid_body_properties[l].mass = rigid_body_properties[l].mass * torch.rand(1).uniform_(lower_bound,higher_bound).numpy()
                 link_mass_tensor[l]=rigid_body_properties[l].mass
 
@@ -459,13 +397,6 @@ for iter_run in range(num_of_runs):
     body_names = gym.get_actor_rigid_body_names(env, franka_handle)
 
     # Prepare jacobian tensor
-    """E:
-    conv da stato joints (9) a pos end_effector (6) --> forw kin, da joint coord a world coord
-    Shape:
-    10 -> num_bodies (filtra su corpo che ci interessa) 
-    6 -> velocità del body (3 lineari 3 angolari)
-    9 -> joints (7 normali e 2 dita)
-    """
     # For franka, tensor shape is (num_envs, 10, 6, 9)
     _jacobian = gym.acquire_jacobian_tensor(sim, "franka")
     jacobian = gymtorch.wrap_tensor(_jacobian)
@@ -475,17 +406,10 @@ for iter_run in range(num_of_runs):
     j_eef = jacobian[:, hand_index - 1, :]
 
     # Prepare mass matrix tensor
-    """E:
-    descrive la relazione tra le inerzie tra i vari joint (trasforma acc joints in forze joints) --> forza necessaria per cambiare il movimento (sia fermo che durante moto) ed 
-    è influenzata da come è posizionato il robot --> indicata come M(q)
-    """
     # For franka, tensor shape is (num_envs, 9, 9)
     _massmatrix = gym.acquire_mass_matrix_tensor(sim, "franka")
     mm = gymtorch.wrap_tensor(_massmatrix)
 
-    """E:
-    due params OSC paper 3.3.2
-    """
     # Randomizing OSC control parameters
     if not random_kp_kv:
         kp = 10
@@ -580,17 +504,9 @@ for iter_run in range(num_of_runs):
     impedance_controller = PIDController(
         stiffness=kp, damping=kv, ki=ki, j_eef=j_eef, lower=-franka_effort_limits, upper=franka_effort_limits, dt=sim_params.dt, device=args.graphics_device_id)
 
-    # import time
-    # last_time = time.time()
-
     max_iteration = 2000
     ## START LOOP 🔄🔄
     while not condition_window  and itr <= max_iteration-1:
-    # while not gym.query_viewer_has_closed(viewer):  #ORIGINAL
-
-        # now = time.time()
-        # delta_time = now - last_time
-        # last_time = now
 
         itr += 1
         # Update jacobian and mass matrix and contact collection
@@ -606,7 +522,6 @@ for iter_run in range(num_of_runs):
         orn_cur = rb_states[hand_idxs, 3:7]
 
         # Set desired hand positions # ORIGINAL
-        """E: CIRCLE OR SPIRAL"""
         if  osc_task == True:
             if itr ==1:
                 radius = torch.rand((1,num_envs)).uniform_(0.01,0.12).to(device=args.graphics_device_id)
@@ -632,10 +547,6 @@ for iter_run in range(num_of_runs):
                 pos_des[:, 1] = init_pos[:, 1] + math.sin(itr / 100) * radius #EDITED
                 pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 100) * radius #EDITED
 
-            # pos_des[:, 0] = init_pos[:, 0] - 0.05
-            # pos_des[:, 1] = math.sin(itr / 50) * 0.15
-            # pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 50) * 0.15
-
             plotter.add_desired_pose(pos_des)
             plotter.add_actual_pose(pos_cur)
 
@@ -650,7 +561,6 @@ for iter_run in range(num_of_runs):
                 
         if control_imposed and not control_imposed_file:
             # by function
-            # u_custom = my_control_action[:,:,itr].unsqueeze(-1).to(device=args.graphics_device_id) 
             u_custom = my_control_action[:,:,itr].unsqueeze(-1)
             u = u_custom.contiguous().to(device=args.graphics_device_id) 
 
@@ -673,36 +583,18 @@ for iter_run in range(num_of_runs):
             g = torch.zeros(num_envs, dof_count+1, 6, 1, dtype=torch.float, device=args.graphics_device_id)
             g[:, :, 2, :] = 9.81
 
-            # dynamical_inclusion.squeeze(0)[:,1:] --> pick the bodies excluding the first one,
-            # which is fixed to the ground! jacobian is [num_envs,10,6,9], where 10 is the number of body.
-            #  Look at the documentation for further explanation about jacobian and how they're calculated. 
-            # This compensation is taken from https://github.com/NVlabs/oscar/blob/main/oscar/agents/franka.py
-
-            """
-            g_force = dynamical_inclusion.squeeze(0)[:,1:].unsqueeze(-1).unsqueeze(-1) * g --> 32,10,6,1 #masse link * g (forza di gravità dei link)
-            j_link = jacobian[:, :dof_count+1, :, :dof_count] --> 32,10,6,9 #filtro solo su body che mi interessano (primi 10, ignoro un dito della mano)
-            g_torque = (torch.transpose(j_link, 2, 3) @ g_force).squeeze(-1) 
-            --> 32,10,9 #trasponendo la jacob 6x9 (di ogni body di ogni env) faccio passaggio da mondo a giunti, 
-                quindi il g_force (nel sistema mondo) passa a giunti (diventando un torque) che serve a contrastare la gravità [quanto torque serve per rimanere in quella posa]
-            g_torque = torch.sum(g_torque, dim=1, keepdim=False) --> 32,9 #sommo le forze da compensare sui giunti per ogni body (10 body x 9 giunti)
-            g_torque = g_torque.unsqueeze(-1) --> 32,9,1 #shape matching con u
-            u += g_torque --> 32,9,1
-            """
-
             g_force = dynamical_inclusion.squeeze(0)[:,1:].unsqueeze(-1).unsqueeze(-1) * g
             j_link = jacobian[:, :dof_count+1, :, :dof_count]
             g_torque = (torch.transpose(j_link, 2, 3) @ g_force).squeeze(-1)
             g_torque = torch.sum(g_torque, dim=1, keepdim=False)
             g_torque = g_torque.unsqueeze(-1)
             plotter.add_joint_pose((-dof_torques-g_torque).view(1, num_envs, franka_num_dofs).squeeze(dim=0)[:, :7]) # removing compensation from sensor read
-            u += g_torque       # u = u + g_torque --> more efficent
+            u += g_torque
         else:
             plotter.add_joint_pose(-dof_torques.view(1, num_envs, franka_num_dofs).squeeze(dim=0)[:, :7])
 
     # ------------------------------------- APPLICATION OF U -------------------------------------------------
-        """E:
-        U -> effort to apply on the joints (computed based on the task)
-        """
+
         # Set control action as torque tensor, or position tensor
         gym.set_dof_actuation_force_tensor(sim, gymtorch.unwrap_tensor(u))
 
@@ -752,7 +644,6 @@ for iter_run in range(num_of_runs):
             # Step rendering
             gym.step_graphics(sim)
             gym.draw_viewer(viewer, sim, False) # True - collision | False - visual
-            # gym.sync_frame_time(sim)
 
         # --------------------------------------- Stacking in the buffers -------------------------------------------------
 
@@ -773,7 +664,6 @@ for iter_run in range(num_of_runs):
             if itr==1:
                 print(f"\n Torque Imposed by OSC - {type_of_task}")
             control_action = u
-            # if xy_task , I want [2, 9, 1001]
 
         # dynamical inclusion happens, both if the masses changes, both if the masses don't change
         if dynamical_inclusion_flag == True:
@@ -810,9 +700,6 @@ for iter_run in range(num_of_runs):
 
             #This is the increment of the undesired changes in quaternion
             increment = abs(buffer_position[itr-1,:,4:7]- buffer_position[itr-2,:,4:7])
-
-            #This is the increment of the undesired changes in all dofs!
-            # increment = abs(buffer_position[itr-1,:,:7]- buffer_position[itr-2,:,:7])
 
             #These are the out of range simulations
             out_of_range = torch.nonzero(increment > .1) #  np.rad2deg(.15) = 9°
@@ -879,14 +766,6 @@ for iter_run in range(num_of_runs):
             num_valid_envs = num_envs - non_valid_envs
 
             black_list.sort(reverse=True)
-            # for i in range(non_valid_envs):
-
-            #     row_exclude = black_list[i]
-            #     buffer_control_action = torch.cat((buffer_control_action [:,:row_exclude,:],
-            #                                             buffer_control_action [:,row_exclude+1:,:]),1)
-            #     buffer_position = torch.cat((buffer_position [:,:row_exclude,:],
-            #                                             buffer_position [:,row_exclude+1:,:]),1)
-                
             for i in range(non_valid_envs):
 
                 row_exclude = black_list[i]
@@ -904,8 +783,6 @@ for iter_run in range(num_of_runs):
                     buffer_position [:,row_exclude+1:,:]),1)
 
             plotter.plot_with_slider()
-
-        # print(f"Loop duration: {delta_time:.6f} s (≈ {1.0 / delta_time:.2f} Hz)")
 
     # --------------------------------- SAVING THE BUFFERS ----------------------------------------------------
     
@@ -945,18 +822,6 @@ for iter_run in range(num_of_runs):
         # Check if the file already exists in the chosen subfolder (train or dataset):
         list_of_tensors = os.listdir("./out_tensors/"+type_of_dataset)
 
-        """E:
-        12 - seed (for reproducibility)
-        32 - num_envs
-        1000 - max_iteration (steps)
-        0_1 - frequency? (0.1)
-        0010 -  - `random_initial_positions` = False (0)
-                - `random_stiffness_dofs` = False (0)
-                - `random_masses` = True (1)
-                - `random_coms` = False (0)
-        15_15 - higher/lower bound mass (percentage)
-        """
-        """ 12_envs_32_steps_1000_f_0_1_MS_rand_0010_bounds_mass_15_15.pt """
         name_tensor = (str(generated_seed) +
                        '_envs_' + str(num_valid_envs) +
                        '_steps_' + str(max_iteration) +
@@ -1023,15 +888,6 @@ for iter_run in range(num_of_runs):
     # =================================== END OF SIMULATION ==================================================
     gym.destroy_sim(sim)
 
-    # print(buffer_position.size()) # that's the size of the acquisition x-y-z
-    # print(buffer_control_action.size()) # that's the size of the control action u
-
-    # # results: matrix of steps x num_envs
-    # =================================== PLOT TRAJECTORIES ==================================================
-    
-    # i = 0 ,1, 2   # x y z [m]
-    # i = 3 - 6   # quaternion orientation
-
     if plot_diagrams and not error_all_collided:
         
         print("\n Plotting ...")
@@ -1069,22 +925,6 @@ for iter_run in range(num_of_runs):
 
         #-----------------------------------------------------------------------------------
 
-        # if osc_task or control_imposed_file:
-
-        #     buffer_control_action = buffer_control_action.movedim(0,1)  #added
-        #     buffer_control_action = buffer_control_action.movedim(1,2)  #added
-            
-        #     fig3, axs3 = plt.subplots(joints, figsize=(20,20))
-        #     fig3.suptitle('Control action among Dofs')
-        #     for i in range(joints):
-        #         temporary=buffer_control_action[i,1:,:].to("cpu").numpy()   
-        #         if i <=joints-1:
-        #             axs3[i].set(ylabel='torque', title='joint'+str(i)+'')
-        #             axs3[i].plot(temporary)
-        #         axs3[i].grid()
-        #     axs3[i].set(xlabel='iteration steps')    
-        # else:
-            # if plot_only_torques:
         fig3, axs3 = plt.subplots(joints, figsize=(20,20))
         fig3.suptitle('Control action among Dofs',y=1.2)
 
@@ -1109,14 +949,6 @@ for iter_run in range(num_of_runs):
                 axs2[i].set(ylabel='mass', title='body'+str(i)+'')
                 axs2[i].plot(temporary)
 
-        # label_coordinates = ['x','y','z']
-        # fig4, axs4 = plt.subplots(3)
-        # fig4.suptitle('Position Target')
-        # for i in range(3):
-        #     axs4[i].plot(buffer_target[:,:,i].to("cpu").numpy())
-        #     axs4[i].set(xlabel='iteration steps', ylabel='m', title=label_coordinates[i])
-        #     axs4[i].grid()
-
         fig3.tight_layout(pad=3)
         fig.tight_layout(pad=3)
         fig.subplots_adjust(top = .96)
@@ -1134,48 +966,6 @@ for iter_run in range(num_of_runs):
     # clearing associated memory --> Apparently it seems to not effecting 
     # the required Used Dedicated Memory
 
-    # # if control action is imposed, clear variable u_custom
-
-    # if control_imposed:  
-    # del u_custom
-    # del u 
-    # del buffer_position
-    # del buffer_control_action
-    # del full_pose 
-    # del contact_forces
-    # del _contact_forces
-    # del out_of_range
-
     torch.cuda.empty_cache()
 
 print("Simulation finished.")
-
-
-# ============================== SAVING TENSORS TO FILE ===============================
-
-    # This is the format in which the tensor is saved:
-
-    #  NNN         -->  SEED
-    # _envs_     --> number of envs 
-    # _num_runs_ --> number of runs 
-    # 
-    # (example, if envs is 128 and num_runs is 10 --> potentially 1280 envs 
-    # [without considering % of collided envs])
-
-    #steps      -->  number of time steps
-    # frequency -->  is the base frequency of the control action 
-    #                 (which is maipulated internally by the function)
-
-    # _input_   -->  type of input: MS,CH,COMB | Multi-sinusoidal, chirp, combination
-
-    # _rand_  -->  boolean variables in 0/1 | The case below, produce _random_1010
-
-    # # random_initial_positions = True         
-    # # random_stiffness_dofs = False
-    # # random_masses = True
-    # # random_coms = False
-
-    # _bounds_mass_ --> lower_bound and higher_bound 
-
-
-

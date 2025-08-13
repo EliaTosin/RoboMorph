@@ -16,7 +16,7 @@ class Plotter():
 
         self.dof_init_pos = torch.zeros((1, 7))
 
-        #plot related variables
+        # plot related variables
         self.axis_labels = ["x", "y", "z"]
         self.colors = ["red", "green", "blue"]
         self.dof_labels = [f"j{i}" for i in range(len(dof_upper_limits))]
@@ -61,7 +61,7 @@ class Plotter():
             fig.suptitle(f"Plotting env {env_idx} \n dof init: {dof_pretty}")
             axes = axes.flatten()
 
-            # 1. Posizione target vs actual
+            # 1. Target vs actual position
             ax_pos = axes[0]
             for i, color in enumerate(colors):
                 ax_pos.plot(self.desired_poses[1:, env_idx, i].tolist(), label=axis_labels[i] + " target", color=color, linestyle='dotted')
@@ -71,8 +71,8 @@ class Plotter():
             ax_pos.grid(True)
             ax_pos.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
 
-            # 2. Giunti singoli
-            for i in range(1, 8):  # 7 giunti nei subplot 1–7
+            # 2. Joint states
+            for i in range(1, 8):
                 ax = axes[i]
                 joint_data = self.joint_poses[1:, env_idx, i - 1]
                 joint_target = self.joint_target[1:, env_idx, i - 1]
@@ -90,31 +90,31 @@ class Plotter():
                 ax.grid(True)
                 ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
 
-                # Etichetta asse x solo per subplot in ultima riga (assumi 4x2 layout)
+                # just label the x-axis on the last row
                 if i in [6, 7]:
                     ax.set_xlabel("Timesteps")
 
-            # Disattiva eventuale subplot extra
+            # Removing additional axes
             if len(axes) > 8:
                 for ax in axes[8:]:
                     ax.axis('off')
 
-            plt.tight_layout(rect=[0, 0, 1, 0.95])  # lascia spazio per il titolo
+            plt.tight_layout(rect=[0, 0, 1, 0.95])  # add space for the title
 
             plt.show()
 
     def update_plot(self, env_idx):
-        # Cancella il contenuto precedente dei grafici
+        # Claer previous garphs (slider used)
         for ax in self.axes:
             for line in ax.lines:
                 line.remove()
 
-        # Dati per l'ambiente specifico
+        # Getting data for the selected environment
         dof_inits = self.dof_init_pos[env_idx + 1, :].tolist()  # skipping the first env (zeros due to init)
         dof_pretty = [f"{label}: {init_value:.2f}" for label, init_value in zip(self.dof_labels, dof_inits)]
         self.fig.suptitle(f"Plotting env {env_idx} \n dof init: {dof_pretty}")
 
-        # 1. Posizione target vs actual
+        # 1. Target vs actual position
         ax_pos = self.axes[0]
         for i, color in enumerate(self.colors):
             ax_pos.plot(self.desired_poses[1:, env_idx, i].tolist(), label=self.axis_labels[i] + " target", color=color, linestyle='dotted')
@@ -124,8 +124,8 @@ class Plotter():
         ax_pos.grid(True)
         ax_pos.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
 
-        # 2. Giunti singoli
-        for i in range(1, 8):  # 7 giunti nei subplot 1–7
+        # 2. Joint states
+        for i in range(1, 8):
             ax = self.axes[i]
             joint_data = self.joint_poses[1:, env_idx, i - 1]
             joint_target = self.joint_target[1:, env_idx, i - 1]
@@ -143,30 +143,30 @@ class Plotter():
             ax.grid(True)
             ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
 
-            # Etichetta asse x solo per subplot in ultima riga (assumi 4x2 layout)
+            # just label the x-axis on the last row
             if i in [6, 7]:
                 ax.set_xlabel("Timesteps")
 
             ax.autoscale(enable=True, axis='y')
 
-        # Disattiva eventuale subplot extra
+        # Removing additional axes
         if len(self.axes) > 8:
             for ax in self.axes[8:]:
                 ax.axis('off')
 
-        # Aggiorna il layout
+        # Update layout
         plt.draw()
 
     def plot_with_slider(self):
-        # Crea uno slider in cima per cambiare l'ambiente
+        # Create a slider to select the environments
         ax_slider = plt.axes([0.1, 0.01, 0.8, 0.03], facecolor='lightgoldenrodyellow')
 
         slider = Slider(ax_slider, 'Env Index', 0, self.desired_poses.shape[1] - 1, valinit=0, valstep=1)
 
-        # Collega la funzione di aggiornamento al cambiamento dello slider
+        # Event trigger on the slider (plot again)
         slider.on_changed(self.update_plot)
 
-        # Inizializza il grafico con il primo ambiente
+        # Plot the first environment to start
         self.update_plot(0)
 
         plt.show()
