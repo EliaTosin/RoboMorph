@@ -22,9 +22,12 @@ class Plotter():
         self.dof_labels = [f"j{i}" for i in range(len(dof_upper_limits))]
         self.dof_colors = ['dodgerblue', 'limegreen', 'tomato', 'magenta', 'darkorange', 'chocolate', 'gold']
 
-        self.fig, self.axes = plt.subplots(4, 2, figsize=(14, 10), sharex=True)
-        self.fig.subplots_adjust(left=0.05, right=0.85, wspace=0.4, hspace=0.5)
+        self.fig, self.axes = plt.subplots(4, 2, figsize=(14, 14), sharex=True)
+        # self.fig.subplots_adjust(left=0.05, right=0.85, wspace=0.4, hspace=0.5)
         self.axes = self.axes.flatten()  # Flatten to easily iterate over
+
+        self.font_size = 20
+        self.font_size2 = 15
 
     def add_desired_pose(self, pos_des):
         """Concatenate the desired pose of the EEF in cartesian coordinates"""
@@ -112,17 +115,18 @@ class Plotter():
         # Dati per l'ambiente specifico
         dof_inits = self.dof_init_pos[env_idx + 1, :].tolist()  # skipping the first env (zeros due to init)
         dof_pretty = [f"{label}: {init_value:.2f}" for label, init_value in zip(self.dof_labels, dof_inits)]
-        self.fig.suptitle(f"Plotting env {env_idx} \n dof init: {dof_pretty}")
+        # self.fig.suptitle(f"Plotting env {env_idx} \n dof init: {dof_pretty}")
 
         # 1. Posizione target vs actual
         ax_pos = self.axes[0]
         for i, color in enumerate(self.colors):
             ax_pos.plot(self.desired_poses[1:, env_idx, i].tolist(), label=self.axis_labels[i] + " target", color=color, linestyle='dotted')
             ax_pos.plot(self.actual_poses[1:, env_idx, i].tolist(), alpha=0.5, label=self.axis_labels[i] + " actual", color=color)
-        ax_pos.set_title("Target vs Actual Position")
-        ax_pos.set_ylabel('Position')
+        ax_pos.set_title("Target vs Actual Position", fontsize=self.font_size)
+        ax_pos.set_ylabel('Position [m]', fontsize=self.font_size)
+        ax_pos.tick_params(axis='both', labelsize=self.font_size)
         ax_pos.grid(True)
-        ax_pos.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
+        ax_pos.legend(loc='center left', bbox_to_anchor=(1.0, 0.5), fontsize=self.font_size2)
 
         # 2. Giunti singoli
         for i in range(1, 8):  # 7 giunti nei subplot 1–7
@@ -138,15 +142,15 @@ class Plotter():
             ax.axhline(upper, linestyle="--", color=color, alpha=0.6)
             ax.axhline(lower, linestyle="--", color=color, alpha=0.6)
 
-            ax.set_title(f"Joint {i - 1} [min: {lower:.2f}, max: {upper:.2f}]")
-            ax.set_ylabel('Position')
+            ax.set_title(f"Joint {i - 1}", fontsize=self.font_size)
+            ax.set_ylabel('Torque [N/m]', fontsize=self.font_size)
             ax.grid(True)
-            ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5))
+            ax.legend(loc='center left', bbox_to_anchor=(1.0, 0.5), fontsize=self.font_size2)
+            ax.tick_params(axis='both', labelsize=self.font_size)
 
             # Etichetta asse x solo per subplot in ultima riga (assumi 4x2 layout)
             if i in [6, 7]:
-                ax.set_xlabel("Timesteps")
-
+                ax.set_xlabel("Timesteps", fontsize=self.font_size)
             ax.autoscale(enable=True, axis='y')
 
         # Disattiva eventuale subplot extra
@@ -159,14 +163,14 @@ class Plotter():
 
     def plot_with_slider(self):
         # Crea uno slider in cima per cambiare l'ambiente
-        ax_slider = plt.axes([0.1, 0.01, 0.8, 0.03], facecolor='lightgoldenrodyellow')
-
-        slider = Slider(ax_slider, 'Env Index', 0, self.desired_poses.shape[1] - 1, valinit=0, valstep=1)
-
-        # Collega la funzione di aggiornamento al cambiamento dello slider
-        slider.on_changed(self.update_plot)
+        # ax_slider = plt.axes([0.1, 0.01, 0.8, 0.03], facecolor='lightgoldenrodyellow')
+        #
+        # slider = Slider(ax_slider, 'Env Index', 0, self.desired_poses.shape[1] - 1, valinit=0, valstep=1)
+        #
+        # # Collega la funzione di aggiornamento al cambiamento dello slider
+        # slider.on_changed(self.update_plot)
 
         # Inizializza il grafico con il primo ambiente
         self.update_plot(0)
-
+        plt.tight_layout()
         plt.show()
