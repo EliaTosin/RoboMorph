@@ -18,9 +18,9 @@ def orientation_error(desired, current):
     q_r = quat_mul(desired, cc)
     return q_r[:, 0:3] * torch.sign(q_r[:, 3]).unsqueeze(-1)
 
-class CartesianImpedanceController:
+class PIDController:
 
-    def __init__(self, stiffness, damping, j_eef, lower, upper, device):
+    def __init__(self, stiffness, damping, ki, j_eef, lower, upper, dt, device):
         """
             init
                 stiffness,
@@ -34,6 +34,7 @@ class CartesianImpedanceController:
         """
         self.stiffness = stiffness
         self.damping = damping
+        self.ki = ki
         self.j_eef = j_eef
         self.device = device
         self.torque_limit_lower = torch.tensor(lower, device=device)
@@ -44,6 +45,8 @@ class CartesianImpedanceController:
         self.pos_target = torch.zeros_like(self.pos)
         self.orient = torch.zeros((num_envs, 3), device=device)
         self.orient_target = torch.zeros_like(self.orient)
+        self.error_sum = torch.zeros((num_envs, 6), device=device)
+        self.dt = dt
 
     def start(self, pos, des_pos, orn, orn_des, vel):
         """
@@ -73,10 +76,12 @@ class CartesianImpedanceController:
         pos_err = self.pos_target - self.pos
         orn_err = orientation_error(self.orient_target, self.orient)
         dpose = torch.cat([pos_err, orn_err], dim=-1)
+        self.error_sum[:, :3] += pos_err
+        self.error_sum[:, 3:] += orn_err
 
         j_eef_T = torch.transpose(self.j_eef, 1, 2)
 
-        u = j_eef_T @ (self.stiffness * dpose.unsqueeze(-1) - self.damping * (self.j_eef @ self.dof_vel))
+        u = j_eef_T @ (self.stiffness * dpose.unsqueeze(-1) - self.damping * (self.j_eef @ self.dof_vel) + (self.ki * self.error_sum * self.dt).unsqueeze(-1))
         return u
 
 

@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import os
 from pathlib import Path
 
-from Franka_CartesianImpedanceController import CartesianImpedanceController
+from Franka_PIDController import PIDController
 from PlotterHelper import Plotter
 
 torch.cuda.empty_cache()
@@ -345,7 +345,8 @@ for iter_run in range(num_of_runs):
         #set DOF initial position 
 
         if  not random_initial_positions:
-            default_dof_state["pos"][:7] = franka_mids[:7]
+            default_dof_state["pos"][:6] = franka_mids[:6]
+            default_dof_state["pos"][6] = 0.785
         else:
             #magnitude controls "how" far is from middle position (0.5 is mids)
             magnitude = torch.rand(1).uniform_(0.2,0.8).numpy()
@@ -432,8 +433,8 @@ for iter_run in range(num_of_runs):
     
     if not headless_mode:
         # Point camera at middle env
-        cam_pos = gymapi.Vec3(4, 4, 4) # gymapi.Vec3(4, 3, 3)
-        cam_target = gymapi.Vec3(-4, -3, -2)  #gymapi.Vec3(-4, -3, 0)
+        cam_pos = gymapi.Vec3(2, 0, 0.5) # gymapi.Vec3(4, 3, 3)
+        cam_target = gymapi.Vec3(-1, 0, 0)  #gymapi.Vec3(-4, -3, 0)
         middle_env = envs[num_envs // 2 + num_per_row // 2]
         gym.viewer_camera_look_at(viewer, middle_env, cam_pos, cam_target)
 
@@ -572,15 +573,17 @@ for iter_run in range(num_of_runs):
 
     _dof_states = gym.acquire_dof_state_tensor(sim)
     itr = 0 # control variable for inner loop
-    kp=1000
-    kd=600
-    impedance_controller = CartesianImpedanceController(
-        stiffness=kp, damping=kv, j_eef=j_eef, lower=-franka_effort_limits, upper=franka_effort_limits, device=args.graphics_device_id)
+    kp = 325
+    kd = 600
+
+    ki=0.35
+    impedance_controller = PIDController(
+        stiffness=kp, damping=kv, ki=ki, j_eef=j_eef, lower=-franka_effort_limits, upper=franka_effort_limits, dt=sim_params.dt, device=args.graphics_device_id)
 
     # import time
     # last_time = time.time()
 
-
+    max_iteration = 2000
     ## START LOOP 🔄🔄
     while not condition_window  and itr <= max_iteration-1:
     # while not gym.query_viewer_has_closed(viewer):  #ORIGINAL
@@ -624,10 +627,10 @@ for iter_run in range(num_of_runs):
                 # pos_des[:, 2] = init_pos[:, 2] + - 0.1 + (WHY PLUS? Should be * looking at VS) 0.2 * itr/max_iteration
                 pos_des[:, 2] = init_pos[:, 2] - 0.1 * itr/max_iteration
             elif type_of_task == 'FC': # Fixed circle
-                # radius = 0.1
+                radius = 0.2
                 pos_des[:, 0] = init_pos[:, 0]
-                pos_des[:, 1] = init_pos[:, 1] + math.sin(itr / 50) * radius #EDITED
-                pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 50) * radius #EDITED
+                pos_des[:, 1] = init_pos[:, 1] + math.sin(itr / 100) * radius #EDITED
+                pos_des[:, 2] = init_pos[:, 2] + math.cos(itr / 100) * radius #EDITED
 
             # pos_des[:, 0] = init_pos[:, 0] - 0.05
             # pos_des[:, 1] = math.sin(itr / 50) * 0.15
