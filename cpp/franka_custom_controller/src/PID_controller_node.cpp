@@ -15,13 +15,6 @@
 
 #include "franka_custom_controller/examples_common.h"
 
-
-/*
-
-        QUESTO FILE USATO
-
-*/
-
 void saturatedTorque(std::array<double, 7>& tau_cmd, const std::array<double, 7>& limits) {
     for (size_t i = 0; i < 7; ++i) {
         if (tau_cmd[i] > limits[i]) {
